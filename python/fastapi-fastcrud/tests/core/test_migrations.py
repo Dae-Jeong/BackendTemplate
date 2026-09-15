@@ -9,7 +9,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from sqlalchemy import insert, select, text
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import create_engine, insert, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
@@ -180,3 +182,63 @@ def test_populated_previous_revision_upgrade_preserves_state(tmp_path: Path) -> 
 
     run_migration(database_url, "upgrade", "head")
     run_migration(database_url, "check")
+
+
+def test_foreign_key_check_failure_rolls_back_entire_migration(
+    tmp_path: Path,
+) -> None:
+    database_url = f"sqlite+aiosqlite:///{tmp_path}/invalid-legacy.db"
+    database_path = str(make_url(database_url).database)
+    run_migration(database_url, "upgrade", "7372e3cacca4")
+    with closing(sqlite3.connect(database_path)) as connection:
+        connection.execute("PRAGMA foreign_keys=OFF")
+        connection.execute(
+            "INSERT INTO reservations (id, product_id, created_at) VALUES (?, ?, ?)",
+            ("orphan", "missing", "2026-09-08T00:00:00+00:00"),
+        )
+        connection.commit()
+
+    config = Path(__file__).resolve().parents[2] / "alembic.ini"
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "-c", str(config), "upgrade", "head"],
+        env={**os.environ, "DB_PRIMARY_URL": database_url},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "Migration left foreign key violations" in result.stderr
+
+    with closing(sqlite3.connect(database_path)) as connection:
+        revision = connection.execute(
+            "SELECT version_num FROM alembic_version"
+        ).fetchone()
+        assert revision == ("7372e3cacca4",)
+        product_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(products)")
+        }
+        assert product_columns == {"id", "available"}
+        assert connection.execute(
+            "SELECT id, product_id, created_at FROM reservations"
+        ).fetchall() == [("orphan", "missing", "2026-09-08T00:00:00+00:00")]
+        assert not connection.execute(
+            "SELECT name FROM sqlite_master WHERE name='_alembic_tmp_products'"
+        ).fetchall()
+
+
+def test_migration_rejects_connection_with_existing_transaction(
+    database_url: str,
+) -> None:
+    database_path = str(make_url(database_url).database)
+    config_path = Path(__file__).resolve().parents[2] / "alembic.ini"
+    config = Config(str(config_path))
+    engine = create_engine(f"sqlite:///{database_path}")
+    try:
+        with engine.begin() as connection:
+            config.attributes["connection"] = connection
+            with pytest.raises(
+                RuntimeError,
+                match="Alembic migrations require a connection without a transaction",
+            ):
+                command.check(config)
+    finally:
+        engine.dispose()

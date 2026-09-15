@@ -10,13 +10,17 @@ from template_fastcrud_api.core.database import create_primary_engine
 from template_fastcrud_api.core.database_metrics import create_database_metrics
 from template_fastcrud_api.core.metrics import create_metrics
 from template_fastcrud_api.core.settings import Settings
-from template_fastcrud_api.models import Base
+from template_fastcrud_api.models import reservations as reservation_models
 
 config = context.config
-target_metadata = Base.metadata
+target_metadata = reservation_models.Base.metadata
 
 
 def do_run_migrations(connection: Connection) -> None:
+    if connection.in_transaction():
+        raise RuntimeError(
+            "Alembic migrations require a connection without a transaction"
+        )
     sqlite_connection = connection.dialect.name == "sqlite"
     if sqlite_connection:
         connection.connection.dbapi_connection.execute("PRAGMA foreign_keys=OFF")
@@ -28,13 +32,10 @@ def do_run_migrations(connection: Connection) -> None:
         )
         with context.begin_transaction():
             context.run_migrations()
-        if sqlite_connection:
-            violations = connection.execute(text("PRAGMA foreign_key_check")).all()
-            if violations:
-                raise RuntimeError(
-                    f"Migration left foreign key violations: {violations}"
-                )
-            connection.commit()
+            if sqlite_connection:
+                violations = connection.execute(text("PRAGMA foreign_key_check")).all()
+                if violations:
+                    raise RuntimeError("Migration left foreign key violations")
     finally:
         if sqlite_connection:
             connection.connection.dbapi_connection.execute("PRAGMA foreign_keys=ON")

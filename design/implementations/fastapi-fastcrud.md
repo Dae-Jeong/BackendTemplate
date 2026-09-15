@@ -184,6 +184,8 @@ timezone-aware column 선택과도 일치하는 타입 의도이지만 PostgreSQ
 자동 갱신을 보장하지 않으므로 필요한 audit 값을 SQL에 명시해야 합니다. 이전 revision의 product는 새 migration 실행 시작
 시각 하나를 `created_at`·`updated_at`에 backfill합니다. 이는 과거 생성 시각이 아니라 legacy row의 audit 시작 근사치입니다.
 최종 schema에는 계속 적용되는 server default를 남기지 않습니다.
+SQLite parent table의 batch 재생성 동안 migration 전용 연결만 FK enforcement를 잠시 끄고, 같은 migration transaction 안에서
+`foreign_key_check`를 통과해야 commit합니다. 위반 시 schema·data·Alembic revision을 함께 rollback한 뒤 FK 설정을 복구합니다.
 
 `SoftDeleteMixin`은 `is_deleted=False`와 nullable `deleted_at`을 독립적으로 제공하며 현재는 `ProductModel`만 조합합니다.
 삭제는 FastCRUD `delete(..., commit=False)`로 바깥 transaction에 참여합니다. 활성 product 조회와 조건부 재고 차감은
@@ -206,11 +208,12 @@ seed의 `ON CONFLICT DO NOTHING`도 재고와 삭제 상태를 바꾸지 않으�
 
 - Python 3.14.7, FastAPI 0.141.1, FastCRUD 0.22.3, SQLAlchemy 2.0.53,
   Uvicorn 0.53.0을 lockfile 환경에서 확인했습니다.
-- Ruff check·format check와 ty가 통과했고 전체 pytest는 100개가 통과했습니다.
+- Ruff check·format check와 ty가 통과했고 전체 pytest는 102개가 통과했습니다.
   Starlette 1.6.0의 `anyio.abc.BlockingPortal` 별칭 경고 1건은 기준선과 같은
   좁은 filter로 표시합니다.
 - 새 audit migration은 빈 DB의 upgrade/check/downgrade/re-upgrade뿐 아니라 이전 revision의 product·reservation·
-  idempotency snapshot을 채운 DB에서도 기존 값 보존, UTC backfill, FK 무결성을 검증했습니다. ORM/Core/FastCRUD update의
+  idempotency snapshot을 채운 DB에서도 기존 값 보존, UTC backfill, FK 무결성을 검증했습니다. 의도한 FK 위반에서는
+  schema·data·revision이 모두 이전 상태로 rollback되는 것도 확인했습니다. ORM/Core/FastCRUD update의
   `updated_at`, 생성 시각 유지, delete commit/rollback, 삭제 상품 조회·재고·seed·ID 재사용 거절과 commit된 키 재생도
   격리 SQLite에서 확인했습니다.
 - uv build가 wheel과 sdist를 만들었고 패키지에 `.env`, data, 가상환경,

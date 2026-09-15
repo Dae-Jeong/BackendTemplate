@@ -19,7 +19,7 @@ class UTCDateTime(TypeDecorator[datetime]):
     ) -> datetime | None:
         if value is None:
             return None
-        if value.tzinfo is None:
+        if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("UTCDateTime requires a timezone-aware datetime")
         return value.astimezone(UTC)
 
