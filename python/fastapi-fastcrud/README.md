@@ -52,7 +52,11 @@ SAVEPOINT·REQUIRES_NEW는 지원하지 않습니다. 자동 `crud_router`는 �
 
 FastCRUD 0.22.3의 create 입력은 `model_dump()`을 제공하는 Pydantic 모델입니다. Service가
 storage 전용 Pydantic 입력을 만들고 `commit=False`로 호출하며, SDK create 계약은 test-local
-입력 모델로 직접 검증합니다.
+입력 모델로 직접 검증합니다. 멱등 snapshot은 별도 중복 DTO 없이 frozen 업무 `Reservation`을
+`IdempotencyRecord.response`의 타입으로 재사용합니다. Pydantic storage schema가 DB의 기존 JSON을
+읽을 때 필드·타입·datetime 형식을 runtime 검증하고, Pydantic `TypeAdapter` serializer가 FastCRUD의
+기본 `model_dump()`에서도 기존 JSON key와 UTC ISO 8601 문자열을 생성합니다. 따라서 Service는 문자열
+key로 snapshot을 조립하거나 읽지 않습니다.
 
 ## 검증
 
@@ -66,5 +70,6 @@ uv tool run --from uv==0.12.10 uv build
 
 테스트는 독립 임시 SQLite 파일을 사용하고 migration, rollback, commit 실패,
 동시 thread/process 경합, 응답 유실 후 재생, FastCRUD flush/refresh와 ORM 비노출을
-검증합니다. PostgreSQL·인증·운영 배포·Compose·자동 CRUD endpoint는 현재 범위가
-아닙니다.
+검증합니다. 기존 raw JSON snapshot의 typed read와 손상된 필드·타입·시각의 runtime 거절,
+FastCRUD create의 JSON 직렬화도 실제 SQLite에서 확인합니다. PostgreSQL·인증·운영 배포·
+Compose·자동 CRUD endpoint는 현재 범위가 아닙니다.

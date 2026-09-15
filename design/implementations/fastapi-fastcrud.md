@@ -126,8 +126,12 @@ rollback-only입니다. 다른 Task의 동시 Session 사용과 사전/autobegin
 `schemas/reservations.py`는 공개 HTTP schema인 `ReserveRequest`·`ReservationData`와 FastCRUD 경계 전용
 `ProductSelect`·`ReservationCreate`·`IdempotencyRecord`를 별도 class로 소유합니다. 멱등 키의 create/select
 필드는 같으므로 같은 storage class를 재사용하되 공개 HTTP schema와는 결합하지 않습니다.
-Service는 저장된 snapshot을 업무 `Reservation`으로 변환하고 typed create 입력을 조립합니다. FastCRUD 0.22.3의
-create는 `model_dump()`을 제공하는 Pydantic 입력 모델을 받습니다.
+`IdempotencyRecord.response`는 별도 중복 model 대신 frozen 업무 `Reservation`을 중첩 타입으로 재사용합니다.
+Pydantic storage schema가 기존 JSON object를 읽을 때 필드·타입·datetime 형식을 runtime 검증하고,
+`TypeAdapter` serializer가 FastCRUD 0.22.3 create의 기본 `model_dump()` 결과를 기존 key와 UTC ISO 8601
+문자열로 만듭니다.
+정적 타입은 Service의 key/field 실수를 줄이지만 DB JSON 손상을 보장하지 않으며, 손상 거절은 이 runtime 검증이
+소유합니다. Service는 typed attribute와 keyword construction만 사용해 저장 입력과 `ReservationResult`를 만듭니다.
 
 Service는 idempotency key를 FastCRUD로 먼저 조회해 replay와 conflict를 판정하고, 조건부 차감 실패 뒤 활성 product를
 FastCRUD로 조회해 not-found와 sold-out을 구분합니다. 새 예약에서는 reservation과 성공 snapshot을 각각의 FastCRUD
@@ -222,11 +226,12 @@ restore API, 자동 CRUD/delete HTTP endpoint는 범위 밖입니다.
 
 - Python 3.14.7, FastAPI 0.141.1, FastCRUD 0.22.3, SQLAlchemy 2.0.53,
   Uvicorn 0.53.0을 lockfile 환경에서 확인했습니다.
-- Ruff check·format check와 ty가 통과했고 전체 pytest는 106개가 통과했습니다.
+- Ruff check·format check와 ty가 통과했고 전체 pytest는 110개가 통과했습니다.
   Starlette 1.6.0의 `anyio.abc.BlockingPortal` 별칭 경고 1건은 기준선과 같은
   좁은 filter로 표시합니다.
 - 결합 저장 성공과 snapshot의 정확한 replay, reservation insert 뒤 멱등 키 insert 실패 시
-  재고·reservation·키 전체 rollback과 같은 키 재시도를 격리 SQLite에서 확인했습니다.
+  재고·reservation·키 전체 rollback과 같은 키 재시도를 격리 SQLite에서 확인했습니다. 기존 raw JSON
+  snapshot의 typed read, 누락·잘못된 타입·datetime 거절, FastCRUD create의 JSON 저장도 확인했습니다.
 - 새 audit migration은 빈 DB의 upgrade/check/downgrade/re-upgrade뿐 아니라 이전 revision의 product·reservation·
   idempotency snapshot을 채운 DB에서도 기존 값 보존, UTC backfill, FK 무결성을 검증했습니다. 의도한 FK 위반에서는
   schema·data·revision이 모두 이전 상태로 rollback되는 것도 확인했습니다. ORM/Core/FastCRUD update의

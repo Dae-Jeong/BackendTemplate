@@ -4,12 +4,13 @@ from typing import cast
 from unittest.mock import patch
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import func, select, update
 from sqlalchemy.engine import Row
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from template_fastcrud_api.contracts.reservations import Reservation
 from template_fastcrud_api.core.database import create_primary_engine
 from template_fastcrud_api.core.database_metrics import create_database_metrics
 from template_fastcrud_api.core.metrics import create_metrics
@@ -103,11 +104,13 @@ def test_fastcrud_create_flushes_refreshes_and_outer_transaction_rolls_back(
                             key="test-key",
                             product_id="fastcrud",
                             reservation_id=reservation.id,
-                            response={
-                                "reservation_id": reservation.id,
-                                "product_id": reservation.product_id,
-                                "created_at": reservation.created_at,
-                            },
+                            response=Reservation(
+                                reservation_id=reservation.id,
+                                product_id=reservation.product_id,
+                                created_at=datetime.fromisoformat(
+                                    reservation.created_at
+                                ),
+                            ),
                         )
                         await idempotency_crud.create(
                             db=session,
@@ -121,17 +124,58 @@ def test_fastcrud_create_flushes_refreshes_and_outer_transaction_rolls_back(
                             key="test-key",
                         )
                         assert selected_replay == replay
+                        assert await session.scalar(
+                            select(IdempotencyKeyModel.response).where(
+                                IdempotencyKeyModel.key == "test-key"
+                            )
+                        ) == {
+                            "reservation_id": reservation.id,
+                            "product_id": reservation.product_id,
+                            "created_at": "2026-09-15T00:00:00Z",
+                        }
+                        legacy_reservation = ReservationModel(
+                            id="legacy-reservation",
+                            product_id="fastcrud",
+                            created_at="2026-09-16T00:00:00+00:00",
+                        )
+                        session.add(legacy_reservation)
+                        await session.flush()
+                        session.add(
+                            IdempotencyKeyModel(
+                                key="legacy-key",
+                                product_id="fastcrud",
+                                reservation_id=legacy_reservation.id,
+                                response={
+                                    "reservation_id": legacy_reservation.id,
+                                    "product_id": legacy_reservation.product_id,
+                                    "created_at": legacy_reservation.created_at,
+                                },
+                            )
+                        )
+                        await session.flush()
+                        legacy_replay = await idempotency_crud.get(
+                            db=session,
+                            schema_to_select=IdempotencyRecord,
+                            return_as_model=True,
+                            key="legacy-key",
+                        )
+                        assert legacy_replay is not None
+                        assert legacy_replay.response == Reservation(
+                            reservation_id="legacy-reservation",
+                            product_id="fastcrud",
+                            created_at=datetime(2026, 9, 16, tzinfo=UTC),
+                        )
                         assert (
                             await session.scalar(
                                 select(func.count()).select_from(ReservationModel)
                             )
-                            == 1
+                            == 2
                         )
                         assert (
                             await session.scalar(
                                 select(func.count()).select_from(IdempotencyKeyModel)
                             )
-                            == 1
+                            == 2
                         )
                         raise RuntimeError("force rollback")
 
@@ -156,6 +200,66 @@ def test_fastcrud_create_flushes_refreshes_and_outer_transaction_rolls_back(
             await engine.dispose()
 
     asyncio.run(scenario())
+
+
+def test_idempotency_record_validates_legacy_json_snapshot() -> None:
+    raw_record = {
+        "key": "legacy-key",
+        "product_id": "demo",
+        "reservation_id": "legacy-reservation",
+        "response": {
+            "reservation_id": "legacy-reservation",
+            "product_id": "demo",
+            "created_at": "2026-09-16T00:00:00+00:00",
+        },
+    }
+
+    record = IdempotencyRecord.model_validate(raw_record)
+
+    assert record.response == Reservation(
+        reservation_id="legacy-reservation",
+        product_id="demo",
+        created_at=datetime(2026, 9, 16, tzinfo=UTC),
+    )
+    assert record.model_dump()["response"] == {
+        "reservation_id": "legacy-reservation",
+        "product_id": "demo",
+        "created_at": "2026-09-16T00:00:00Z",
+    }
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        {
+            "reservation_id": "reservation",
+            "product_id": "demo",
+            "created": "2026-09-16T00:00:00+00:00",
+        },
+        {
+            "reservation_id": "reservation",
+            "product_id": 42,
+            "created_at": "2026-09-16T00:00:00+00:00",
+        },
+        {
+            "reservation_id": "reservation",
+            "product_id": "demo",
+            "created_at": "not-a-datetime",
+        },
+    ],
+)
+def test_idempotency_record_rejects_invalid_snapshot(
+    response: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        IdempotencyRecord.model_validate(
+            {
+                "key": "key",
+                "product_id": "demo",
+                "reservation_id": "reservation",
+                "response": response,
+            }
+        )
 
 
 def test_product_timestamps_cover_defaults_orm_core_fastcrud_and_rollback(

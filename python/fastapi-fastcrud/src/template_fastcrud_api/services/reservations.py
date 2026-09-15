@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC
 from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,13 +43,10 @@ async def reserve(
     if existing is not None:
         if existing.product_id != product_id:
             raise IdempotencyConflict()
-        snapshot = existing.response
-        reservation = Reservation(
-            snapshot["reservation_id"],
-            snapshot["product_id"],
-            datetime.fromisoformat(snapshot["created_at"]),
+        return ReservationResult(
+            reservation=existing.response,
+            replayed=True,
         )
-        return ReservationResult(reservation, replayed=True)
 
     if not await decrement_stock_if_available(session, product_id):
         product = await product_crud.get(
@@ -63,18 +60,17 @@ async def reserve(
             raise ProductNotFound()
         raise SoldOut()
 
-    reservation = Reservation(uuid4().hex, product_id, clock().astimezone(UTC))
-    snapshot = {
-        "reservation_id": reservation.reservation_id,
-        "product_id": reservation.product_id,
-        "created_at": reservation.created_at.isoformat(),
-    }
+    reservation = Reservation(
+        reservation_id=uuid4().hex,
+        product_id=product_id,
+        created_at=clock().astimezone(UTC),
+    )
     await reservation_crud.create(
         db=session,
         object=ReservationCreate(
             id=reservation.reservation_id,
             product_id=reservation.product_id,
-            created_at=snapshot["created_at"],
+            created_at=reservation.created_at.isoformat(),
         ),
         commit=False,
     )
@@ -84,8 +80,8 @@ async def reserve(
             key=key,
             product_id=reservation.product_id,
             reservation_id=reservation.reservation_id,
-            response=snapshot,
+            response=reservation,
         ),
         commit=False,
     )
-    return ReservationResult(reservation, replayed=False)
+    return ReservationResult(reservation=reservation, replayed=False)

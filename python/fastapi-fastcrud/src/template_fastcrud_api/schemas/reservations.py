@@ -1,6 +1,10 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_serializer
+
+from template_fastcrud_api.contracts.reservations import Reservation
+
+_RESERVATION_ADAPTER = TypeAdapter(Reservation)
 
 
 class ReserveRequest(BaseModel):
@@ -29,4 +33,8 @@ class IdempotencyRecord(BaseModel):
     key: str
     product_id: str
     reservation_id: str
-    response: dict[str, str]
+    response: Reservation
+
+    @field_serializer("response")
+    def serialize_response(self, response: Reservation) -> dict[str, str]:
+        return _RESERVATION_ADAPTER.dump_python(response, mode="json")
