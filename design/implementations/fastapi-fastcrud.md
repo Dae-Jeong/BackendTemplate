@@ -12,7 +12,7 @@ FastCRUD 변형은 SQLAlchemy ORM mapped class로 일반 CRUD를 줄이되,
 
 두 앱은 비교 후 하나를 선택해 가져가는 독립 앱입니다. 패키지·lockfile·migration·테스트를 각각 소유하며
 공유 framework나 공통 `BaseRepository`·`BaseCRUD`를 새로 만들지 않습니다. 이 변형은
-`Service → crud → DB`를 사용하고 FastCRUD 객체를 forwarding 함수로 다시 감싸지 않습니다. 네이티브 기본 포트는
+Service가 `crud → DB`와 순수 validation을 조율하고 FastCRUD 객체를 forwarding 함수로 다시 감싸지 않습니다. 네이티브 기본 포트는
 `127.0.0.1:18092`이며 Compose·컨테이너·공유 모니터링에는 연결하지 않았습니다.
 
 ### 프로젝트 생성 기록
@@ -71,7 +71,8 @@ FastCRUD 0.22.3의 `create(..., commit=False)`는 내부에서 `flush()`와 `ref
 | `models/mixins.py` | 독립 조합 가능한 UTC timestamp·soft-delete column과 SQLite UTC 복원 타입을 소유합니다. |
 | `models/reservations.py` | product·reservation·idempotency mapped class와 DB 제약을 소유합니다. |
 | `crud/` | model별 FastCRUD 객체와 원자적 조건부 재고 감소·seed upsert의 특수 SQL만 소유합니다. 업무 판정·schema 조립·commit은 소유하지 않습니다. |
-| `services/` | `@transactional`로 업무 범위를 표시하고 FastCRUD 호출, typed storage 입력 조립, replay·conflict·not-found·sold-out 판정과 저장 순서를 소유합니다. HTTP schema와 ORM을 반환하지 않습니다. |
+| `services/` | `@transactional`로 업무 범위를 표시하고 FastCRUD 호출, typed storage 입력 조립, validation 호출과 저장 순서를 소유합니다. 실제 조건부 감소 실패 뒤 `SoldOut`을 결정하며 HTTP schema와 ORM을 반환하지 않습니다. |
+| `validation/` | DB 호출 없이 typed FastCRUD select record를 받아 replay 충돌과 활성 상품 존재 업무 조건을 검사합니다. |
 | `contracts/` | HTTP·Pydantic·ORM과 분리한 불변 업무 결과를 소유합니다. |
 | `schemas/` | 기능별 파일에서 공개 HTTP schema와 FastCRUD 전용 create/select schema를 별도 class로 소유합니다. |
 | `routers/` | HTTP 검증·응답 변환을 수행하고 Service를 호출합니다. |
@@ -108,6 +109,7 @@ flowchart TD
     SERVICE --> BOUNDARY["core/transactions.py<br/>begin · commit/rollback · metrics"]
     SERVICE --> REPLAY["idempotency_crud.get<br/>replay 조회"]
     SERVICE --> STOCK["crud helper<br/>조건부 재고 차감"]
+    SERVICE --> VALIDATION["validation<br/>순수 업무 조건"]
     SERVICE --> SAVE["reservation_crud + idempotency_crud<br/>create × 2 · commit=False"]
     REPLAY --> DB[("SQLite")]
     STOCK --> DB
@@ -134,8 +136,9 @@ Pydantic storage schema가 기존 JSON object를 읽을 때 필드·타입·date
 정적 타입은 Service의 key/field 실수를 줄이지만 DB JSON 손상을 보장하지 않으며, 손상 거절은 이 runtime 검증이
 소유합니다. Service는 typed attribute와 keyword construction만 사용해 저장 입력과 `ReservationResult`를 만듭니다.
 
-Service는 idempotency key를 FastCRUD로 먼저 조회해 replay와 conflict를 판정하고, 조건부 차감 실패 뒤 활성 product를
-FastCRUD로 조회해 not-found와 sold-out을 구분합니다. 새 예약에서는 reservation과 성공 snapshot을 각각의 FastCRUD
+Service는 idempotency key를 FastCRUD로 먼저 조회하고 typed record를 validation에 전달해 replay와 conflict를 판정합니다.
+조건부 차감 실패 뒤 활성 product를 FastCRUD로 조회하고 validation으로 not-found를 확인한 다음 sold-out을 결정합니다.
+validation은 DB 호출·쓰기·transaction을 소유하지 않습니다. 새 예약에서는 reservation과 성공 snapshot을 각각의 FastCRUD
 객체로 `commit=False` 생성합니다. 바깥 `@transactional`이 재고·reservation·멱등 키의 commit/rollback을 계속
 소유하며 두 번째 write나 commit 실패도 전체 rollback됩니다.
 
@@ -161,7 +164,8 @@ changed = await session.scalar(
 )
 ```
 
-`changed is None`이면 같은 transaction에서 활성 상품 존재 여부를 확인해 `PRODUCT_NOT_FOUND`와 `SOLD_OUT`을 구분합니다.
+`changed is None`이면 Service가 같은 transaction에서 활성 상품을 조회하고 순수 validation으로 존재를 확인한 뒤
+`PRODUCT_NOT_FOUND`와 `SOLD_OUT`을 구분합니다.
 선조회 후 무조건 차감하는 방식으로 바꾸지 않습니다. 재고 차감·예약·멱등 키·응답 snapshot은 모두 commit되거나 모두
 rollback됩니다. 성공 응답은 commit 뒤 만들며, 응답 유실 후 같은 키·같은 입력은 저장된 동일 결과를 재생하고 다른 입력은
 `IDEMPOTENCY_CONFLICT`로 거절합니다. 실패로 rollback된 키는 저장하지 않습니다.
@@ -208,15 +212,33 @@ SQLite parent table의 batch 재생성 동안 migration 전용 연결만 FK enfo
 삭제는 FastCRUD `delete(..., commit=False)`로 바깥 transaction에 참여합니다. 활성 product 조회와 조건부 재고 차감은
 `is_deleted=False`를 명시합니다. product ID는 전체 table primary key라 삭제 후에도 재사용하거나 자동 부활시키지 않습니다.
 seed의 `ON CONFLICT DO NOTHING`도 재고와 삭제 상태를 바꾸지 않으며, 삭제 ID를 seed한 뒤 활성 조건의
-`product_crud.get`은 결과를 반환하지 않아 seed orchestration이 `ProductNotFound`를 발생시킵니다. 전역 query filter,
+`product_crud.get`은 결과를 반환하지 않아 seed orchestration이 같은 순수 product validation을 호출해
+`ProductNotFound`를 발생시킵니다. 전역 query filter,
 restore API, 자동 CRUD/delete HTTP endpoint는 범위 밖입니다.
+
+## 예약 업무 validation 책임 작업
+
+목표:
+FastCRUD 직접 호출 구조와 단일 조건부 SQL은 유지하면서 replay 충돌·활성 product 존재 업무 조건을
+이 앱의 독립 순수 validation으로 분리하고 Service가 실행 순서를 조율합니다.
+
+예상 결과:
+- `IdempotencyRecord.product_id`가 요청과 다르면 snapshot 내부 값과 무관하게 `IdempotencyConflict`로 판정됩니다.
+- 조건부 감소 실패 뒤 `ProductSelect | None`을 검증하고, 존재하면 Service가 `SoldOut`을 발생시킵니다.
+- seed도 같은 product 존재 validation을 사용해 삭제 product를 거절하고 기존 stock을 초기화하지 않습니다.
+- FastCRUD 직접 호출·typed storage schema·HTTP replay·clock·metrics·atomic rollback·경합 동작이 유지됩니다.
+
+실행 결과:
+예약 집중 시험 21개와 전체 pytest 111개, Ruff check/format, ty, `uv build`가 통과했습니다.
+authoritative 저장 `product_id`만 다른 replay는 409이고 재고·예약·키가 변하지 않음을 API 시험으로 확인했습니다.
+기존 API·seed 시험이 업무 분기와 상태 불변을 검증하므로 validator 구현을 그대로 반복하는 단위시험은 추가하지 않았습니다.
 
 ## 구현·검증 상태
 
 | 단계 | 상태 | 확인 내용 |
 | --- | --- | --- |
 | 설정·migration | 완료 | 독립 Python/package/lock/DB와 ORM metadata, Alembic revision을 생성했습니다. |
-| FastCRUD 경계 | 완료 | Service가 활성 product·key 조회와 reservation·replay 저장에 model별 FastCRUD 객체를 직접 사용하고, SDK create 계약은 직접 시험합니다. |
+| FastCRUD 경계 | 완료 | Service가 활성 product·key 조회와 reservation·replay 저장에 model별 FastCRUD 객체를 직접 사용하고, typed 결과의 업무 조건은 순수 validation으로 검사하며 SDK create 계약은 직접 시험합니다. |
 | product audit·soft delete | 완료 | UTC create/update, FastCRUD delete, 활성 조회·재고 필터, rollback·seed·재생 정책을 검증했습니다. |
 | 예약 계약 | 완료 | 조건부 차감·snapshot·멱등성·commit 실패·thread/process 경합을 독립 SQLite에서 시험합니다. |
 | transaction 실행 | 완료 | `@transactional`의 중첩·rollback-only·소유권·오류 번역·두 outcome과 Session 재사용을 시험합니다. |
@@ -227,12 +249,14 @@ restore API, 자동 CRUD/delete HTTP endpoint는 범위 밖입니다.
 
 - Python 3.14.7, FastAPI 0.141.1, FastCRUD 0.22.3, SQLAlchemy 2.0.53,
   Uvicorn 0.53.0을 lockfile 환경에서 확인했습니다.
-- Ruff check·format check와 ty가 통과했고 전체 pytest는 110개가 통과했습니다.
+- Ruff check·format check와 ty가 통과했고 전체 pytest는 111개가 통과했습니다.
   Starlette 1.6.0의 `anyio.abc.BlockingPortal` 별칭 경고 1건은 기준선과 같은
   좁은 filter로 표시합니다.
 - 결합 저장 성공과 snapshot의 정확한 replay, reservation insert 뒤 멱등 키 insert 실패 시
   재고·reservation·키 전체 rollback과 같은 키 재시도를 격리 SQLite에서 확인했습니다. 기존 raw JSON
   snapshot의 typed read, 누락·잘못된 타입·datetime 거절, FastCRUD create의 JSON 저장도 확인했습니다.
+- authoritative idempotency 행의 `product_id`와 snapshot 값이 다를 때 저장 행을 기준으로 conflict를 판정하고
+  상태가 변하지 않는 것을 확인했습니다.
 - 새 audit migration은 빈 DB의 upgrade/check/downgrade/re-upgrade뿐 아니라 이전 revision의 product·reservation·
   idempotency snapshot을 채운 DB에서도 기존 값 보존, UTC backfill, FK 무결성을 검증했습니다. 의도한 FK 위반에서는
   schema·data·revision이 모두 이전 상태로 rollback되는 것도 확인했습니다. ORM/Core/FastCRUD update의

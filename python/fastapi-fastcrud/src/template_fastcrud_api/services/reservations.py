@@ -13,15 +13,15 @@ from template_fastcrud_api.crud.reservations import (
     product_crud,
     reservation_crud,
 )
-from template_fastcrud_api.exceptions.reservations import (
-    IdempotencyConflict,
-    ProductNotFound,
-    SoldOut,
-)
+from template_fastcrud_api.exceptions.reservations import SoldOut
 from template_fastcrud_api.schemas.reservations import (
     IdempotencyRecord,
     ProductSelect,
     ReservationCreate,
+)
+from template_fastcrud_api.validation.reservations import (
+    validate_product_exists,
+    validate_replay_product,
 )
 
 
@@ -41,10 +41,8 @@ async def reserve(
         key=key,
     )
     if existing is not None:
-        if existing.product_id != product_id:
-            raise IdempotencyConflict()
         return ReservationResult(
-            reservation=existing.response,
+            reservation=validate_replay_product(product_id, existing),
             replayed=True,
         )
 
@@ -56,8 +54,7 @@ async def reserve(
             id=product_id,
             is_deleted=False,
         )
-        if product is None:
-            raise ProductNotFound()
+        validate_product_exists(product)
         raise SoldOut()
 
     reservation = Reservation(

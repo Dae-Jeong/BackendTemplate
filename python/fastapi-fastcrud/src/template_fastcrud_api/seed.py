@@ -14,8 +14,8 @@ from template_fastcrud_api.crud.reservations import (
     insert_product_if_absent,
     product_crud,
 )
-from template_fastcrud_api.exceptions.reservations import ProductNotFound
 from template_fastcrud_api.schemas.reservations import ProductSelect, ReserveRequest
+from template_fastcrud_api.validation.reservations import validate_product_exists
 
 
 async def seed(product_id: str, stock: int) -> None:
@@ -39,8 +39,7 @@ async def seed(product_id: str, stock: int) -> None:
                 id=product_id,
                 is_deleted=False,
             )
-            if product is None:
-                raise ProductNotFound()
+            product = validate_product_exists(product)
         print(json.dumps({"product_id": product.id, "available": product.available}))
     finally:
         await engine.dispose()
