@@ -14,6 +14,12 @@ import org.springframework.boot.web.server.context.WebServerApplicationContext
 import tools.jackson.databind.json.JsonMapper
 
 class KotlinJsonBoundaryTest {
+    private data class JsonCase(
+        val body: String,
+        val expectedLocation: List<String>,
+        val expectedCode: String,
+    )
+
     @Test
     fun missingNullNumberAndMalformedJsonKeepPublic422Meaning() {
         val database = Files.createTempDirectory("kotlin-json-").resolve("db")
@@ -26,13 +32,13 @@ class KotlinJsonBoundaryTest {
             val server = requireNotNull((app as WebServerApplicationContext).webServer)
             val port = server.port
             HttpClient.newHttpClient().use { client ->
-                val cases: List<Pair<String, Pair<List<String>, String>>> = listOf(
-                    "{}" to Pair(listOf("body", "product_id"), "REQUIRED"),
-                    "{\"product_id\":null}" to Pair(listOf("body", "product_id"), "INVALID"),
-                    "{\"product_id\":3}" to Pair(listOf("body", "product_id"), "INVALID"),
-                    "{" to Pair(emptyList(), "INVALID"),
+                val cases = listOf(
+                    JsonCase("{}", listOf("body", "product_id"), "REQUIRED"),
+                    JsonCase("{\"product_id\":null}", listOf("body", "product_id"), "INVALID"),
+                    JsonCase("{\"product_id\":3}", listOf("body", "product_id"), "INVALID"),
+                    JsonCase("{", emptyList(), "INVALID"),
                 )
-                for ((body, expected) in cases) {
+                for ((body, expectedLocation, expectedCode) in cases) {
                     val response = client.send(
                         HttpRequest.newBuilder(URI.create("http://127.0.0.1:$port/v1/reservations"))
                             .header("Content-Type", "application/json")
@@ -47,8 +53,8 @@ class KotlinJsonBoundaryTest {
                     val actualLocation = buildList {
                         for (index in 0 until location.size()) add(location.get(index).asString())
                     }
-                    assertEquals(expected.first, actualLocation)
-                    assertEquals(expected.second, error.get("code").asString())
+                    assertEquals(expectedLocation, actualLocation)
+                    assertEquals(expectedCode, error.get("code").asString())
                 }
                 val openApi = client.send(
                     HttpRequest.newBuilder(URI.create("http://127.0.0.1:$port/openapi.json")).build(),

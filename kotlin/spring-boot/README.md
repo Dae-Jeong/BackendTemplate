@@ -35,7 +35,7 @@ curl http://127.0.0.1:18093/health/ready
 
 ```sh
 export DB_PRIMARY_URL='jdbc:h2:file:./data/template;DB_CLOSE_ON_EXIT=FALSE;LOCK_TIMEOUT=1000;WRITE_DELAY=0'
-java -jar build/libs/backend-template-0.0.1-SNAPSHOT.jar --seed --app.seed.product-id=demo --app.seed.stock=10
+./scripts/start.sh --seed --app.seed.product-id=demo --app.seed.stock=10
 ./scripts/start.sh
 ```
 

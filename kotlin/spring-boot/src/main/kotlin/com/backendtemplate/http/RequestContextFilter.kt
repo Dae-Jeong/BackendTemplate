@@ -4,10 +4,8 @@ import com.backendtemplate.config.AppProperties
 import jakarta.servlet.AsyncEvent
 import jakarta.servlet.AsyncListener
 import jakarta.servlet.FilterChain
-import jakarta.servlet.ServletException
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import org.slf4j.LoggerFactory
@@ -33,16 +31,7 @@ class RequestContextFilter(private val properties: AppProperties) : OncePerReque
         val completed = AtomicBoolean()
         try {
             chain.doFilter(request, response)
-        } catch (error: IOException) {
-            request.setAttribute("error.type", error.javaClass.name)
-            throw error
-        } catch (error: ServletException) {
-            request.setAttribute("error.type", error.javaClass.name)
-            throw error
-        } catch (error: RuntimeException) {
-            request.setAttribute("error.type", error.javaClass.name)
-            throw error
-        } catch (error: Error) {
+        } catch (error: Throwable) {
             request.setAttribute("error.type", error.javaClass.name)
             throw error
         } finally {

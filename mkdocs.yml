@@ -86,7 +86,7 @@ nav:
           - 로직과 내부 동작: design/implementations/spring-boot-internals.md
           - 구현 설계: design/implementations/spring-boot.md
           - 폴더와 역할: design/implementations/spring-boot-structure.md
-      - Kotlin Spring Boot (독립 검토 대기):
+      - Kotlin Spring Boot:
           - 구현 설계: design/implementations/kotlin-spring-boot.md
           - 폴더와 역할: design/implementations/kotlin-spring-boot-structure.md
       - Rails:
@@ -109,7 +109,7 @@ nav:
       - Spring Boot:
           - 검증 결과와 재현: design/implementations/spring-boot-verification.md
           - 단계별 작업: design/implementations/spring-boot-tasks.md
-      - Kotlin Spring Boot (독립 검토 대기):
+      - Kotlin Spring Boot:
           - 검증 결과와 재현: design/implementations/kotlin-spring-boot-verification.md
           - 구현 단계와 후속 범위: design/implementations/kotlin-spring-boot-tasks.md
       - Rails:

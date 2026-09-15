@@ -1,6 +1,6 @@
 # Kotlin / Spring Boot 구현 설계
 
-Status: **Task 1–8 구현·자동 시험·native 재시작 검증 완료 · 독립 검토 대기** · 2026-09-16
+Status: **Task 1–10 구현·독립 검토·자동 시험·native 재시작·문서 통합 검증 완료** · 2026-09-16
 
 `kotlin/spring-boot/`는 Java 구현을 대체하거나 호출하지 않는 독립 sibling 앱입니다.
 공통 HTTP·DB·관측 계약과 Spring/JPA의 동작은 [Java 구현 설계](spring-boot.md),

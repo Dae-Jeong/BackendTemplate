@@ -8,8 +8,8 @@ FastAPI + FastCRUD·SQLite 구현을 제공합니다.
 Rails는 [별도 시작점](ruby/rails/README.md)으로 추가 중입니다. 인사·health와 SQLite 예약 생성·조회,
 조건부 재고 차감을 제공하며 멱등성·metrics·Compose 통합은 후속입니다.
 Kotlin Spring Boot sibling은 [native 실행 안내](kotlin/spring-boot/README.md)와
-[검증 기록](design/implementations/kotlin-spring-boot-verification.md)이 있으며 Task 1–8을 구현했습니다.
-최종 수락 전 독립 검토는 아직 남아 있고 Docker·Compose는 제공하지 않습니다.
+[검증 기록](design/implementations/kotlin-spring-boot-verification.md)이 있으며 Task 1–10 구현·독립 검토·문서 통합을 완료했습니다.
+38개 자동 시험과 native 재시작을 검증했으며 Docker·Compose는 제공하지 않습니다.
 
 ## 저장소 한눈에 보기
 
@@ -22,7 +22,7 @@ Kotlin Spring Boot sibling은 [native 실행 안내](kotlin/spring-boot/README.m
 | [`python/fastapi-fastcrud/`](python/fastapi-fastcrud/README.md) | FastAPI · uv · FastCRUD/SQLAlchemy ORM/SQLite · Alembic |
 | [`ts/nestjs/`](ts/nestjs/README.md) | NestJS · pnpm · Drizzle/SQLite · worker에서 DB 실행 |
 | [`java/spring-boot/`](java/spring-boot/README.md) | Spring Boot · Gradle · JPA/Hibernate/H2 · Flyway |
-| [`kotlin/spring-boot/`](kotlin/spring-boot/README.md) | Kotlin Spring Boot · Gradle Kotlin DSL · JPA/Hibernate/H2 · native 구현·독립 검토 대기 |
+| [`kotlin/spring-boot/`](kotlin/spring-boot/README.md) | Kotlin Spring Boot · Gradle Kotlin DSL · JPA/Hibernate/H2 · native 검증 완료 |
 | [`design/`](design/README.md) | 공통 설계와 구현별 상세·검증의 정본 |
 | `compose.yaml` · `scripts/compose.sh` | 구현을 선택해 로컬 컨테이너 실행 |
 | `infra/monitoring/` · `docs/` | Prometheus·Grafana 설정과 MkDocs 도구 환경 |
@@ -48,7 +48,7 @@ Docker가 실행된 환경에서 **저장소 루트**에서 사용할 구현의 
 
 Kotlin Spring Boot의 18094는 후속 container 게시 포트로만 예약했으며 현재 Compose를 제공하지 않습니다.
 
-수락된 네 구현과 독립 검토 전 Kotlin 구현은 DB URL을 설정하지 않으면
+수락된 다섯 구현은 DB URL을 설정하지 않으면
 인사·health·docs·metrics만 활성화합니다.
 예약을 사용하려면 구현별 가이드의 DB 설정·migration·seed 순서를 따릅니다.
 종료는 같은 구현 이름으로 `./scripts/compose.sh fastapi stop api`처럼 실행하며 데이터는 유지합니다.
@@ -62,7 +62,8 @@ Kotlin Spring Boot의 18094는 후속 container 게시 포트로만 예약했으
 | 루트 `scripts/compose.sh` | 구현 선택, 버전 파일·빌드 경로·포트·환경 파일을 Compose에 전달 |
 | 각 구현의 `Dockerfile` | 해당 언어로 이미지 빌드와 컨테이너 진입점 정의 |
 | FastAPI·NestJS의 `scripts/start.sh` | DB 활성 시 migration을 적용한 뒤 앱 실행 |
-| Spring Boot의 `scripts/start.sh` | 네이티브 JAR 실행. 컨테이너는 Dockerfile에서 JAR를 직접 실행하며 Flyway는 앱 시작 시 적용 |
+| Java Spring Boot의 `scripts/start.sh` | 네이티브 JAR 실행. 컨테이너는 Dockerfile에서 JAR를 직접 실행하며 Flyway는 앱 시작 시 적용 |
+| Kotlin Spring Boot의 `scripts/start.sh` | Gradle이 만든 안정 경로 `build/libs/app.jar`를 네이티브로 실행. Compose는 미구현 |
 
 Compose의 기본 환경 파일은 각 구현의 `.env.example`이며 별도 파일은 `BACKEND_ENV_FILE`로 지정합니다.
 네이티브 설치·빌드·실행은 각 구현의 uv·pnpm·Gradle 명령을 사용합니다.

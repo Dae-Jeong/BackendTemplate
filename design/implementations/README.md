@@ -17,14 +17,14 @@
 
 Rails의 최소 API 작업은 [사용 안내](../../ruby/rails/README.md) · [설계](rails.md) ·
 [구조](rails-structure.md) · [Task](rails-tasks.md) · [검증](rails-verification.md)에서 확인합니다.
-예약 생성·조회와 조건부 재고 차감을 구현했으며, 검증 완료된 네 구현과 달리
+예약 생성·조회와 조건부 재고 차감을 구현했으며, 검증 완료된 다섯 구현과 달리
 멱등성·관측·Compose는 아직 후속 범위입니다.
 
 Kotlin Spring Boot는 Java 앱을 대체하거나 호출하지 않는 sibling입니다.
 [native 실행 안내](../../kotlin/spring-boot/README.md) · [구현 설계](kotlin-spring-boot.md) ·
 [구조](kotlin-spring-boot-structure.md) · [Task](kotlin-spring-boot-tasks.md) · [검증](kotlin-spring-boot-verification.md)에서
-Task 1–8 구현·38개 자동 시험·native 18093 재시작 결과를 확인할 수 있습니다.
-독립 검토·최종 수락은 남아 있으며 Docker·Compose는 미구현입니다.
+Task 1–10 구현·독립 검토·문서 통합, 38개 자동 시험과 native 18093 재시작 결과를 확인할 수 있습니다.
+native 범위는 수락했으며 Docker·Compose는 미구현입니다.
 
 | 구현 | 실행 | 설계·구조 | 작업·검증 |
 | --- | --- | --- | --- |
@@ -32,13 +32,12 @@ Task 1–8 구현·38개 자동 시험·native 18093 재시작 결과를 확인�
 | Python / FastAPI + FastCRUD | [환경·명령](../../python/fastapi-fastcrud/README.md) | [설계·검증](fastapi-fastcrud.md) | [설계·검증](fastapi-fastcrud.md) |
 | TypeScript / NestJS | [사용 안내](../../ts/nestjs/README.md) | [설계](nestjs.md) · [구조](nestjs-structure.md) | [Task](nestjs-tasks.md) · [검증](nestjs-verification.md) |
 | Java / Spring Boot | [사용 안내](../../java/spring-boot/README.md) | [내부 동작](spring-boot-internals.md) · [설계](spring-boot.md) · [구조](spring-boot-structure.md) | [Task](spring-boot-tasks.md) · [검증](spring-boot-verification.md) |
-| Kotlin / Spring Boot (독립 검토 대기) | [native 실행](../../kotlin/spring-boot/README.md) | [설계](kotlin-spring-boot.md) · [구조](kotlin-spring-boot-structure.md) | [Task](kotlin-spring-boot-tasks.md) · [검증](kotlin-spring-boot-verification.md) |
+| Kotlin / Spring Boot | [native 실행](../../kotlin/spring-boot/README.md) | [설계](kotlin-spring-boot.md) · [구조](kotlin-spring-boot-structure.md) | [Task](kotlin-spring-boot-tasks.md) · [검증](kotlin-spring-boot-verification.md) |
 
-FastCRUD 변형을 포함한 검증 완료 네 구현은 설정·DI·초기화/종료·health·응답 계약·로그·metrics와
+FastCRUD 변형과 Kotlin sibling을 포함한 검증 완료 다섯 구현은 설정·DI·초기화/종료·health·응답 계약·로그·metrics와
 한정 수량 예약의 동시성·멱등성 예제를 제공합니다.
-이 네 구현은 DB를 설정하지 않으면 예약 기능을 등록하지 않습니다.
+이 다섯 구현은 DB를 설정하지 않으면 예약 기능을 등록하지 않습니다.
 실행한 시험과 구현별 제한은 각 검증 기록에서 확인합니다.
-Kotlin은 같은 계약의 Task 1–8 구현 증거가 있지만 독립 검토가 끝나기 전이므로 수락된 네 구현과는 상태를 구분합니다.
 
 | 선택 | FastAPI | FastAPI + FastCRUD | NestJS | Spring Boot | Kotlin Spring Boot |
 | --- | --- | --- | --- | --- | --- |
@@ -68,7 +67,7 @@ Rust는 후보이며 빈 프로젝트를 만들지 않았습니다.
 | FastAPI + FastCRUD | 18092 | — (미통합) | — (미통합) |
 | NestJS | 18083 | 18084 | 3000 |
 | Spring Boot | 18085 | 18086 | 8080 |
-| Kotlin Spring Boot (독립 검토 대기) | 18093 (구현·native 검증) | 18094 (예약·미구현) | — (미구현) |
+| Kotlin Spring Boot | 18093 (native 검증) | 18094 (예약·미구현) | — (미구현) |
 | Rails 최소 API | 18088 | 18089 (예약·미통합) | 3000 (예정) |
 | MkDocs | 18090 | — | — |
 | Prometheus | — | 19090 | 9090 |

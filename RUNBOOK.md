@@ -11,11 +11,11 @@
 | FastAPI + FastCRUD | `python/fastapi-fastcrud/` | uv · SQLite/FastCRUD | 전체 예약 계약, 네이티브만 제공 · [실행·검증](python/fastapi-fastcrud/README.md) |
 | NestJS | `ts/nestjs/` | pnpm · SQLite/Drizzle | 전체 예약 계약 · [실행·검증](ts/nestjs/README.md) |
 | Spring Boot | `java/spring-boot/` | Gradle Wrapper · H2/JPA | 전체 예약 계약 · [실행·검증](java/spring-boot/README.md) |
-| Kotlin Spring Boot | `kotlin/spring-boot/` | Gradle Kotlin DSL · H2/JPA | 전체 예약 계약 native 구현, 독립 검토 대기·Compose 미구현 · [실행](kotlin/spring-boot/README.md) · [검증](design/implementations/kotlin-spring-boot-verification.md) |
+| Kotlin Spring Boot | `kotlin/spring-boot/` | Gradle Kotlin DSL · H2/JPA | 전체 예약 계약 native 검증 완료, Compose 미구현 · [실행](kotlin/spring-boot/README.md) · [검증](design/implementations/kotlin-spring-boot-verification.md) |
 | Rails | `ruby/rails/` | Bundler · SQLite/Active Record | 인사·health·조건부 재고 예약까지, 멱등성·metrics·Compose는 미구현 · [실행·검증](ruby/rails/README.md) |
 
-Kotlin Spring Boot의 Task 1–8 구현·38개 자동 시험·native 18093 재시작 검증은 완료됐습니다.
-다만 독립 검토 전이므로 최종 수락 상태로 표기하지 않으며, container·Compose는 제공하지 않고 18094만 후속 게시 포트로 예약합니다.
+Kotlin Spring Boot의 Task 1–10 구현·독립 검토·문서 통합, 38개 자동 시험과 native 18093 재시작 검증은 완료됐습니다.
+container·Compose는 제공하지 않고 18094만 후속 게시 포트로 예약합니다.
 
 처음에는 저장소 구조를 그대로 가져오고 선택한 구현만 실행합니다. 독립 프로젝트로 추출할 때는
 해당 디렉터리의 소스·테스트·migration·스크립트·도구 버전 파일·lockfile을 함께 가져갑니다.
@@ -30,7 +30,7 @@ DB 없는 실행을 지원하는 구현에서 그 경계를 먼저 확인한 뒤
 각 구현이 현재 제공하는 예약 범위까지 확인합니다.
 
 - 공통으로 `/health/ready`와 정상·입력 오류 응답을 확인하고, docs endpoint는 각 가이드에 제공된 구현에서만 확인합니다.
-- FastAPI, FastAPI + FastCRUD, NestJS, Java Spring Boot와 독립 검토 전 Kotlin Spring Boot는 DB 활성 후
+- FastAPI, FastAPI + FastCRUD, NestJS, Java Spring Boot와 Kotlin Spring Boot는 DB 활성 후
   201 예약·같은 키 replay·`Idempotency-Replayed: true`를 확인합니다.
 - 위 구현은 `/metrics`와 JSON 로그를 확인합니다. 수집 화면이 필요하면 [로컬 모니터링](design/implementations/local-monitoring.md)의 연결 대상인지 먼저 확인하며,
   Compose가 없는 Kotlin을 제공된 수집 대상으로 가정하지 않습니다.

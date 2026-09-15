@@ -1,3 +1,5 @@
+import org.springframework.boot.gradle.tasks.bundling.BootJar
+
 plugins {
 	kotlin("jvm") version "2.3.21"
 	kotlin("plugin.spring") version "2.3.21"
@@ -62,4 +64,8 @@ dependencyLocking {
 tasks.withType<Test> {
 	useJUnitPlatform()
 	systemProperty("test.runtimeClasspath", sourceSets.test.get().runtimeClasspath.asPath)
+}
+
+tasks.named<BootJar>("bootJar") {
+	archiveFileName.set("app.jar")
 }

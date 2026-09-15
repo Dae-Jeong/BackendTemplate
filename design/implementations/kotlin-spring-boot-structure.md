@@ -1,6 +1,6 @@
 # Kotlin Spring Boot 폴더 구조와 활용 기준
 
-Status: **Task 1–8 실제 파일 기준 · 자동 시험 38개 통과** · 2026-09-16
+Status: **Task 1–9 실제 파일 독립 검토 완료 · 자동 시험 38개 통과** · 2026-09-16
 
 대상은 독립 앱 `kotlin/spring-boot/`이며 package는 `com.backendtemplate`입니다.
 공통 Spring/JPA 책임은 [Java 구조](spring-boot-structure.md), Kotlin 고유 선택과 transaction은
@@ -9,7 +9,7 @@ Status: **Task 1–8 실제 파일 기준 · 자동 시험 38개 통과** · 202
 
 ```mermaid
 flowchart LR
-    APP["BackendTemplateApplication<br/>조립 · 시작/종료"] -. constructor DI .-> CTRL["controllers<br/>HTTP 경계"]
+    APP["TemplateApplication<br/>조립 · 시작/종료"] -. constructor DI .-> CTRL["controllers<br/>HTTP 경계"]
     CTRL --> DTO["dto<br/>data class"]
     CTRL --> ATTEMPTS["services/ReservationAttempts<br/>rollback 뒤 재호출"]
     ATTEMPTS -->|"proxy 호출"| SVC["services<br/>업무·transaction 범위"]
@@ -34,7 +34,7 @@ kotlin/spring-boot/
 └── src/
     ├── main/
     │   ├── kotlin/com/backendtemplate/
-    │   │   ├── BackendTemplateApplication.kt
+    │   │   ├── TemplateApplication.kt
     │   │   ├── config/
     │   │   ├── contracts/
     │   │   ├── controllers/
@@ -60,7 +60,7 @@ kotlin/spring-boot/
 
 | 영역 | 실제 책임 |
 | --- | --- |
-| `BackendTemplateApplication.kt` | `runApplication`, seed profile/non-web 실행, 시작 실패 기록·종료 |
+| `TemplateApplication.kt` | `runApplication`, seed profile/non-web 실행, 시작 실패 기록·종료 |
 | `config/` | immutable configuration properties, UTC `Clock`, no-db 환경 전처리, `JpaTransactionManager`, seed, OpenAPI |
 | `controllers/` | nullable 외부 입력 수신, 형식 검증, service 호출, contract→DTO 변환과 protocol header |
 | `dto/` | Jackson 공개 계약. `data class`·`val`, snake_case annotation, typed root/health/data/Problem/field errors |
