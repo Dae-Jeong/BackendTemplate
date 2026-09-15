@@ -3,6 +3,7 @@ package com.backendtemplate.repositories;
 import static org.assertj.core.api.Assertions.*;
 import com.backendtemplate.TemplateApplication;
 import com.backendtemplate.exceptions.IdempotencyClaimed;
+import com.backendtemplate.exceptions.ReservationFailure;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.persistence.EntityManager;
 import java.nio.file.Files;
@@ -45,6 +46,10 @@ class JpaPersistenceTest {
             app.getBean(com.backendtemplate.services.ProductSeedService.class).seed("batch", 2);
             var first = service.reserve("batch", "first");
             assertThat(service.replay("batch", "first").reservation()).isEqualTo(first.reservation());
+            assertThatThrownBy(() -> service.replay("other", "first"))
+                    .isInstanceOfSatisfying(ReservationFailure.class,
+                            failure -> assertThat(failure.reason())
+                                    .isEqualTo(ReservationFailure.Reason.IDEMPOTENCY_CONFLICT));
             try (var connection = DriverManager.getConnection(url, "sa", ""); var sql = connection.createStatement()) {
                 sql.execute("ALTER TABLE idempotency_keys ADD CONSTRAINT reject_second CHECK (idempotency_key <> 'second')");
             }
@@ -119,7 +124,7 @@ class JpaPersistenceTest {
             seeds.seedIfAbsent("fresh", 2);
             var before = products.findById("fresh").orElseThrow();
             assertThat(entities.contains(before)).isTrue();
-            repository.decreaseStock("fresh");
+            assertThat(repository.decreaseStockIfAvailable("fresh")).isTrue();
             assertThat(entities.contains(before)).isFalse();
             var after = products.findById("fresh").orElseThrow();
             assertThat(after).isNotSameAs(before);

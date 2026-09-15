@@ -1,8 +1,6 @@
 package com.backendtemplate.repositories;
 
 import com.backendtemplate.contracts.Reservation;
-import com.backendtemplate.exceptions.ReservationFailure;
-import com.backendtemplate.exceptions.ReservationFailure.Reason;
 import com.backendtemplate.exceptions.IdempotencyClaimed;
 import jakarta.persistence.EntityManager;
 import java.util.Optional;
@@ -42,20 +40,16 @@ public class ReservationRepository {
                 && failure.getSQL().contains("insert into reservation_claims");
     }
 
-    public Optional<Reservation> findMatchingReplay(String key, String productId) {
-        return replays.findByKey(key).map(row -> {
-            var value = row.toContract();
-            if (!value.productId().equals(productId)) {
-                throw new ReservationFailure(Reason.IDEMPOTENCY_CONFLICT);
-            }
-            return value;
-        });
+    public Optional<Reservation> findReplay(String key) {
+        return replays.findByKey(key).map(ReservationReplayEntity::toContract);
     }
 
-    public void decreaseStock(String productId) {
-        if (products.decreaseAvailableStock(productId) == 0) {
-            throw new ReservationFailure(products.existsById(productId) ? Reason.SOLD_OUT : Reason.PRODUCT_NOT_FOUND);
-        }
+    public boolean decreaseStockIfAvailable(String productId) {
+        return products.decreaseAvailableStock(productId) > 0;
+    }
+
+    public boolean productExists(String productId) {
+        return products.existsById(productId);
     }
 
     public void saveReservationAndReplay(Reservation reservation, String key) {

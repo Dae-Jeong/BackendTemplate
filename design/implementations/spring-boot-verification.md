@@ -1,6 +1,6 @@
 # Spring Boot 검증 기록
 
-Status: 실제 구현·검증 및 제품 seed 책임 분리 결과 · 2026-09-15
+Status: 실제 구현·검증 및 예약 업무 검증 책임 분리 결과 · 2026-09-16
 
 실행 가이드는 [README](../../java/spring-boot/README.md), 선택·transaction 의미는
 [구현 설계](spring-boot.md)가 소유합니다. FastAPI 시험 통과를 Java의 검증 증거로 사용하지 않습니다.
@@ -90,6 +90,24 @@ pending insert 뒤 bulk update의 flush·detach 의미를 계속 검증합니다
 `SeedConfiguration`은 새 Service를 호출하며 예약 Service/Repository에는 seed 호출이 남지 않습니다.
 find-then-persist 의미만 유지하며 동시 seed upsert를 주장하거나 새 migration을 추가하지 않았습니다.
 예약 commit/rollback·fresh replay read와 기존 transaction metrics는 전체 시험으로 재검증했습니다.
+
+## Task 13 예약 업무 검증 책임 분리 검증
+
+`HttpDatabaseTest`는 제품 미존재 `PRODUCT_NOT_FOUND`와 normal replay의 다른 product
+`IDEMPOTENCY_CONFLICT`를 실제 API와 H2 상태로 확인합니다. `JpaPersistenceTest`는 public `replay` 경로에서도
+다른 product를 거절하고 typed JPA replay와 기존 batch/FK/rollback 동작을 유지함을 확인합니다.
+기존 프로세스·transaction 시험으로 status, stock, claim flush, rollback 뒤 fresh read를 함께 재검증했습니다.
+
+Homebrew OpenJDK 25.0.4.1을 명령별 `JAVA_HOME`·`PATH`로만 사용했고, 공식 README 명령은 다음 결과로 통과했습니다.
+
+```sh
+JAVA_HOME=/opt/homebrew/opt/openjdk@25/libexec/openjdk.jdk/Contents/Home \
+PATH=/opt/homebrew/opt/openjdk@25/bin:$PATH \
+./gradlew clean test bootJar --no-daemon --console=plain
+```
+
+최종 결과는 **35개 시험·11 suites·실패/오류/skip 0**, `BUILD SUCCESSFUL`입니다.
+DB·migration·dependency·Compose는 변경하지 않았고 시험은 기존 임시 H2 file과 OS 임시 포트만 사용했습니다.
 
 ## Task 9 JPA 검증
 

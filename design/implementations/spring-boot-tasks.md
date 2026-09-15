@@ -1,6 +1,6 @@
 # Spring Boot 단계별 구현 task
 
-Status: Task 1–12 구현·자동 시험 완료 · 제품 seed 책임 분리 · 2026-09-15
+Status: Task 1–13 구현·자동 시험 완료 · 예약 업무 검증 책임 분리 · 2026-09-16
 
 실행 명령은 [사용 가이드](../../java/spring-boot/README.md), 시험 결과·미검증은
 [검증 기록](spring-boot-verification.md)이 소유합니다.
@@ -20,6 +20,7 @@ Status: Task 1–12 구현·자동 시험 완료 · 제품 seed 책임 분리 ·
 | 10 코드 읽기 비용 개선 | Problem 직접 생성·입력 의미 명시·예약 전용 오류 분기 제거·claim 판별명·표현 정리 | strict clean test bootJar, 35개·11 suites·실패 0 |
 | 11 reservation 저장·replay 명명 | paired reservation/replay 저장과 입력 일치 replay 조회를 메서드 이름에 명시 | 기존 strict clean test bootJar |
 | 12 제품 seed 책임 분리 | public ProductSeedService transaction과 concrete ProductSeedRepository로 이동 | 음수·신규·반복 stock·proxy와 기존 전체 시험 |
+| 13 예약 업무 검증 책임 분리 | repository는 replay·재고 변경·제품 존재 사실, 순수 validation은 존재·입력 일치, Service는 순서·SOLD_OUT 소유 | normal/post-claim replay 회귀·전체 strict build |
 
 ## 단계별 commit
 
@@ -82,3 +83,22 @@ transaction proxy·rollback 뒤 `ReservationAttempts`의 fresh read 경계는 �
 `SeedConfiguration`과 JPA test helper의 호출을 새 소유자로 옮기고 `ReservationService`와
 `ReservationRepository`에서 seed를 제거했습니다. find-then-persist와 반복 seed의 기존 stock 보존,
 예약 transaction·`ReservationAttempts` 복구 경계는 유지했습니다.
+
+## Task 13. 예약 업무 검증 책임 분리
+
+목표:
+Repository의 저장 사실 조회와 예약 업무 조건 판단을 분리하고, normal replay와 claim 충돌 뒤 replay가 같은 순수 입력 일치 검증을 사용하게 합니다.
+
+예상 결과:
+
+- `ReservationRepository`가 typed `Reservation` replay, 재고 변경 boolean, 제품 존재 boolean만 반환함
+- `ReservationValidation`이 제품 존재와 요청·저장 product 일치를 DB 접근 없이 검증함
+- `ReservationService`가 읽기·변경 순서와 실제 조건부 차감 실패 뒤 `SOLD_OUT`을 소유함
+- claim flush 기술 신호, proxy rollback 뒤 fresh replay read, 저장 시각 정밀도와 기존 HTTP·재고·복구 계약이 유지됨
+
+결과:
+
+- `findReplay`, `decreaseStockIfAvailable`, `productExists`로 저장 사실을 드러내고 repository의 업무 오류 결정을 제거했습니다.
+- `reserve`의 기존 replay와 `replay`의 rollback 후 조회 모두 `validateReplayProduct`를 호출합니다.
+- 별도 generic validator나 replay wrapper를 만들지 않았고 JPA column 기반 `Reservation`과 `Instant` 변환을 유지했습니다.
+- Java 25에서 strict `clean test bootJar` 전체 35개·11 suites가 통과했습니다.

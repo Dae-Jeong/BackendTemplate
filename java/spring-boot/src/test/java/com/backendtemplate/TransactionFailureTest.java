@@ -195,7 +195,7 @@ class TransactionFailureTest {
 
         @Transactional(rollbackFor = Exception.class)
         public void fail(boolean checked) throws IOException {
-            repository.decreaseStock("demo");
+            repository.decreaseStockIfAvailable("demo");
             if (checked) throw new IOException("private checked");
             throw new IllegalStateException("private unchecked");
         }

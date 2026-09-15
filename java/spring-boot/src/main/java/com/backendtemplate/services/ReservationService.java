@@ -2,7 +2,10 @@ package com.backendtemplate.services;
 
 import com.backendtemplate.contracts.Reservation;
 import com.backendtemplate.contracts.ReservationResult;
+import com.backendtemplate.exceptions.ReservationFailure;
+import com.backendtemplate.exceptions.ReservationFailure.Reason;
 import com.backendtemplate.repositories.ReservationRepository;
+import com.backendtemplate.validation.ReservationValidation;
 import java.time.Clock;
 import java.util.UUID;
 import org.springframework.context.annotation.Profile;
@@ -22,12 +25,17 @@ public class ReservationService {
 
     @Transactional(rollbackFor = Exception.class)
     public ReservationResult reserve(String productId, String key) {
-        var replay = repository.findMatchingReplay(key, productId);
+        var replay = repository.findReplay(key);
         if (replay.isPresent()) {
-            return new ReservationResult(replay.get(), true);
+            var value = replay.get();
+            ReservationValidation.validateReplayProduct(productId, value.productId());
+            return new ReservationResult(value, true);
         }
         repository.claim(key);
-        repository.decreaseStock(productId);
+        if (!repository.decreaseStockIfAvailable(productId)) {
+            ReservationValidation.validateProductExists(repository.productExists(productId));
+            throw new ReservationFailure(Reason.SOLD_OUT);
+        }
         var reservation = new Reservation(UUID.randomUUID().toString().replace("-", ""), productId, clock.instant());
         repository.saveReservationAndReplay(reservation, key);
         return new ReservationResult(reservation, false);
@@ -35,6 +43,8 @@ public class ReservationService {
 
     @Transactional(readOnly = true, rollbackFor = Exception.class)
     public ReservationResult replay(String productId, String key) {
-        return new ReservationResult(repository.findMatchingReplay(key, productId).orElseThrow(), true);
+        var replay = repository.findReplay(key).orElseThrow();
+        ReservationValidation.validateReplayProduct(productId, replay.productId());
+        return new ReservationResult(replay, true);
     }
 }
