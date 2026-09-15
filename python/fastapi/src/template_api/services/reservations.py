@@ -26,9 +26,13 @@ async def reserve(
 ) -> ReservationResult:
     existing = await find_matching_replay(session, key, product_id)
     if existing is not None:
-        return ReservationResult(existing, replayed=True)
+        return ReservationResult(reservation=existing, replayed=True)
     await decrease_stock(session, product_id)
-    reservation = Reservation(uuid4().hex, product_id, clock().astimezone(UTC))
+    reservation = Reservation(
+        reservation_id=uuid4().hex,
+        product_id=product_id,
+        created_at=clock().astimezone(UTC),
+    )
     await save_reservation(session, reservation)
     await save_idempotency(session, key, reservation)
-    return ReservationResult(reservation, replayed=False)
+    return ReservationResult(reservation=reservation, replayed=False)

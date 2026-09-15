@@ -43,11 +43,6 @@ async def create_reservation(
         clock=clock,
     )
     response.headers["Idempotency-Replayed"] = "true" if result.replayed else "false"
-    reservation = result.reservation
     return Success(
-        data=ReservationData(
-            reservation_id=reservation.reservation_id,
-            product_id=reservation.product_id,
-            created_at=reservation.created_at,
-        )
+        data=ReservationData.model_validate(result.reservation, from_attributes=True)
     )

@@ -32,6 +32,23 @@ def database_state(url: str) -> tuple[int, int, int]:
         )
 
 
+def stored_snapshot(url: str, key: str = "test-key") -> dict[str, object]:
+    with closing(sqlite3.connect(str(make_url(url).database))) as connection:
+        raw = connection.execute(
+            "SELECT response FROM idempotency_keys WHERE key = ?", (key,)
+        ).fetchone()[0]
+    return json.loads(raw)
+
+
+def replace_snapshot(url: str, snapshot: dict[str, object]) -> None:
+    with closing(sqlite3.connect(str(make_url(url).database))) as connection:
+        connection.execute(
+            "UPDATE idempotency_keys SET response = ? WHERE key = 'test-key'",
+            (json.dumps(snapshot),),
+        )
+        connection.commit()
+
+
 def test_seed_cli_preserves_existing_stock(database_url: str) -> None:
     def seed(stock: int):
         process = subprocess.run(
@@ -248,6 +265,65 @@ def test_replay_and_conflicting_input(client: TestClient, database_url: str) -> 
     conflict = client.post("/v1/reservations", json={"product_id": "other"})
     assert conflict.status_code == 409
     assert conflict.json()["code"] == "IDEMPOTENCY_CONFLICT"
+    assert database_state(database_url) == (0, 1, 1)
+
+
+def test_snapshot_uses_native_json_and_reads_legacy_datetime(
+    client: TestClient, database_url: str
+) -> None:
+    first = client.post("/v1/reservations", json={"product_id": "demo"})
+    snapshot = stored_snapshot(database_url)
+    created_at = snapshot["created_at"]
+    assert isinstance(created_at, str)
+    assert created_at.endswith("Z")
+
+    replace_snapshot(
+        database_url,
+        {**snapshot, "created_at": f"{created_at.removesuffix('Z')}+00:00"},
+    )
+    replay = client.post("/v1/reservations", json={"product_id": "demo"})
+    assert replay.status_code == 201
+    assert replay.content == first.content
+    assert replay.headers["Idempotency-Replayed"] == "true"
+    assert database_state(database_url) == (0, 1, 1)
+
+
+@pytest.mark.parametrize(
+    "invalid_snapshot",
+    [
+        {"product_id": "demo", "created_at": "2026-09-16T00:00:00Z"},
+        {
+            "reservation_id": 1,
+            "product_id": "demo",
+            "created_at": "2026-09-16T00:00:00Z",
+        },
+        {
+            "reservation_id": "damaged",
+            "product_id": None,
+            "created_at": "2026-09-16T00:00:00Z",
+        },
+        {"reservation_id": "damaged", "product_id": "demo", "created_at": 0},
+        {"reservation_id": "damaged", "product_id": "demo", "created_at": None},
+        {
+            "reservation_id": "damaged",
+            "product_id": "demo",
+            "created_at": "not-a-date",
+        },
+    ],
+)
+def test_invalid_stored_snapshot_returns_500_without_effects(
+    client: TestClient,
+    database_url: str,
+    invalid_snapshot: dict[str, object],
+) -> None:
+    assert (
+        client.post("/v1/reservations", json={"product_id": "demo"}).status_code == 201
+    )
+    replace_snapshot(database_url, invalid_snapshot)
+
+    replay = client.post("/v1/reservations", json={"product_id": "demo"})
+    assert replay.status_code == 500
+    assert replay.json()["code"] == "INTERNAL_ERROR"
     assert database_state(database_url) == (0, 1, 1)
 
 

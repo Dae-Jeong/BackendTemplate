@@ -1,4 +1,4 @@
-from datetime import datetime
+import json
 
 from sqlalchemy import insert, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -11,6 +11,7 @@ from template_api.exceptions.reservations import (
     SoldOut,
 )
 from template_api.models.reservations import idempotency_keys, products, reservations
+from template_api.schemas.reservations import reservation_adapter
 
 
 async def seed_product(session: AsyncSession, product_id: str, stock: int) -> Product:
@@ -65,12 +66,7 @@ async def find_matching_replay(
         return None
     if row.product_id != product_id:
         raise IdempotencyConflict()
-    response = row.response
-    return Reservation(
-        response["reservation_id"],
-        response["product_id"],
-        datetime.fromisoformat(response["created_at"]),
-    )
+    return reservation_adapter.validate_json(json.dumps(row.response), strict=True)
 
 
 async def save_idempotency(
@@ -81,10 +77,6 @@ async def save_idempotency(
             key=key,
             product_id=reservation.product_id,
             reservation_id=reservation.reservation_id,
-            response={
-                "reservation_id": reservation.reservation_id,
-                "product_id": reservation.product_id,
-                "created_at": reservation.created_at.isoformat(),
-            },
+            response=reservation_adapter.dump_python(reservation, mode="json"),
         )
     )

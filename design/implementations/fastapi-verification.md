@@ -1,6 +1,6 @@
 # FastAPI 검증 케이스
 
-Status: SQLite 1차 구현·transactional decorator·자동 검증 완료 · 아래 실행 결과와 후속 명세 구분 · 2026-09-15
+Status: SQLite 1차 구현·transactional decorator·typed snapshot 자동 검증 완료 · 아래 실행 결과와 후속 명세 구분 · 2026-09-16
 
 [구현 설계](fastapi.md)의 상태와 경계를 검증합니다. 실행 결과 절은 실제 관측이며 이후 케이스 표는 검증 기준입니다.
 진행 상태는 [단계별 task](fastapi-tasks.md), 실행 명령은 [사용 안내](../../python/fastapi/README.md)가 소유합니다.
@@ -49,6 +49,22 @@ Repository의 `find_matching_replay(session, key, product_id)`와 Service callsi
 전체 95개 시험과 `uv build`, Ruff check/format, ty도 통과했습니다. 기존 Starlette
 `BlockingPortal` deprecation 경고 1개는 그대로 표시했습니다.
 이 replay 명명 작업 당시에는 새 테스트·transaction 경계·replay repository를 추가하지 않았습니다.
+
+## typed replay snapshot 경계 검증 — 2026-09-16
+
+Repository 패턴과 `@transactional`은 유지하고, 저장된 멱등 응답 JSON을 기존 불변 `Reservation`의
+`TypeAdapter`로 strict runtime validation한 뒤 반환하도록 변경했습니다. 쓰기는 Pydantic JSON mode를 사용하며
+router도 `ReservationData.model_validate(..., from_attributes=True)`로 변환해 raw key 조립·접근을 제거했습니다.
+
+실제 임시 SQLite와 API에서 새 snapshot의 UTC `Z` 저장, raw JSON의 기존 `+00:00` datetime 읽기와 최초 응답의
+exact body replay를 확인했습니다. 필드 누락, 정수 `reservation_id`, null `product_id`, 숫자·null·불량 문자열
+`created_at`은 모두 422나 성공이 아닌 500으로 거절되고 재고 0·예약 1개·키 1개의 기존 상태에 새 효과가 없었습니다.
+
+- `pytest -q tests/reservations/test_reservations.py`: 26개 통과.
+- 전체 `pytest -q`: 108개 통과. 기존 Starlette `BlockingPortal` deprecation 경고 1개 표시 유지.
+- Ruff check/format, ty, `uv build`: 모두 통과.
+- 기존 저장 실패·commit 실패 rollback, 응답 유실 후 replay, thread/process 경합 시험도 전체 suite에서 유지됐습니다.
+- 모든 DB 시험은 pytest 임시 파일만 사용했으며 실행 중인 앱·사용자 DB를 변경하지 않았습니다.
 
 ## transactional decorator 검증 — 2026-09-15
 

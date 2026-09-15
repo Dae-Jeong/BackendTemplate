@@ -1,6 +1,10 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+
+from template_api.contracts.reservations import Reservation
+
+reservation_adapter = TypeAdapter(Reservation)
 
 
 class ReserveRequest(BaseModel):

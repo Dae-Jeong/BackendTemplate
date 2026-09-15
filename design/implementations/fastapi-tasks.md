@@ -1,6 +1,6 @@
 # FastAPI 단계별 구현 task
 
-Status: Task 1~8 SQLite 구현 및 replay 명명 정리 완료 · PostgreSQL 전환은 후속 · 2026-09-15
+Status: Task 1~8 SQLite 구현 및 typed replay snapshot 경계 완료 · PostgreSQL 전환은 후속 · 2026-09-16
 
 마무리 보완: 사용자 승인으로 로컬 컨테이너의 migration 성공 → API 시작 순서를 연결했습니다.
 새 DB·재시작 보존·DB 미사용·migration 실패 시 시작 차단·SIGTERM 종료의
@@ -327,6 +327,24 @@ Status: 완료 · 2026-09-08. [실행 결과와 재현 절차](fastapi-verificat
 Repository의 `get_replay`를 실제 일치 판단을 드러내는 `find_matching_replay`로 바꾸고
 Service callsite를 함께 변경했습니다. 별도 replay 계층이나 새 테스트는 추가하지 않았으며,
 기존 예약 전체 시험으로 일치 재생·다른 입력 충돌·재고 불변과 경합·복구 동작을 확인했습니다.
+
+### Task 8-4. typed replay snapshot 경계
+
+Status: 완료 · 2026-09-16.
+
+목표:
+고정된 멱등 응답 snapshot을 기존 `Reservation` 계약으로 runtime validation하고, Repository 패턴과
+transaction decorator를 유지한 채 raw key 조립·접근을 typed 변환으로 바꿉니다.
+
+예상 결과:
+- 새 snapshot은 native JSON mode로 저장되고 기존 `+00:00` datetime snapshot도 같은 HTTP body로 재생됩니다.
+- 누락 field, 잘못된 문자열 field type, 숫자·null·불량 datetime은 DB 경계에서 거절되어 500이 되며 새 효과가 없습니다.
+- Service·router는 `Reservation`의 named field와 typed 변환을 사용하고 저장 JSON key를 직접 조립하지 않습니다.
+- 기존 rollback·commit 후 응답 유실·경합·정확한 replay 계약과 전체 자동 검사가 유지됩니다.
+
+실행 결과: 실제 임시 SQLite API에서 새 `Z` snapshot 저장, raw legacy `+00:00` snapshot의 exact HTTP replay,
+손상 snapshot 6종의 500·재고/예약/키 불변을 확인했습니다. 예약 시험 26개와 전체 pytest 108개,
+Ruff check/format, ty, `uv build`가 통과했으며 기존 Starlette 경고 1개는 그대로 표시됩니다.
 
 ### Task 10. transactional decorator 경계
 

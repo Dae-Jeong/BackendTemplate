@@ -65,9 +65,9 @@ flowchart TD
 | `core/settings.py`, `core/clock.py` | 환경 설정과 UTC 시간 공급 구현입니다. |
 | `core/contracts.py` | Clock·관측 결과·로그 문맥 등 공통 기반 계약입니다. |
 | `core/logging.py`, `core/metrics.py` | JSON 로그 출력과 Prometheus registry·지표 기록입니다. |
-| `routers/reservations.py`, `schemas/reservations.py` | 예약 HTTP 입력 검증·응답 변환·멱등 헤더입니다. |
+| `routers/reservations.py`, `schemas/reservations.py` | 예약 HTTP 입력 검증·typed 응답 변환·멱등 헤더와 `Reservation` snapshot의 Pydantic adapter를 소유합니다. |
 | `services/reservations.py` | `@transactional` 업무 순서와 재생·업무 실패 분류를 소유합니다. 기술 transaction 처리는 소유하지 않습니다. |
-| `repositories/reservations.py` | 조건부 차감·예약/키 저장·결과 조회 SQL입니다. commit하지 않습니다. |
+| `repositories/reservations.py` | 조건부 차감·예약/키 저장·결과 조회 SQL과 저장 JSON의 runtime validation·native JSON 직렬화 경계입니다. commit하지 않습니다. |
 | `models/reservations.py` | Core Table·DB 제약·metadata입니다. 외부 요청 schema와 구분합니다. |
 | `contracts/reservations.py` | 불변 업무 결과 타입입니다. HTTP·저장 구현을 import하지 않습니다. |
 | `exceptions/reservations.py`, `exceptions/database.py`, `http/database.py` | 업무/DB 실패 타입과 HTTP 503 변환을 구분합니다. |
@@ -99,6 +99,9 @@ flowchart LR
 예약 호출은 router → service → repository입니다. Session·metrics·clock은 명시적 인자로 전달합니다.
 DB Table은 `models/`, 외부 요청·응답 모델은 `schemas/`, 내부 업무 타입은 `contracts/`에 둡니다.
 같은 필드를 가진다는 이유만으로 모든 타입과 변환 함수를 미리 만들지는 않습니다.
+멱등 결과 JSON은 기존 불변 `Reservation`을 `TypeAdapter`로 검증해 반환하며 Repository 밖에서는 raw key를 읽지 않습니다.
+새 snapshot은 Pydantic JSON mode의 UTC `Z`를 저장하고 기존 `+00:00` ISO snapshot도 읽어 같은 HTTP body로 재생합니다.
+누락·잘못된 field type·datetime은 저장 경계에서 거절되어 500이 되고 해당 요청의 새 효과는 남지 않습니다.
 설정·의존성·자원 수명은 기존 명시적 DI 계약을 유지합니다.
 업무 예외의 정의·등록·응답 매핑은 [업무 예외 처리](fastapi.md#업무-예외-처리)가 소유합니다.
 
