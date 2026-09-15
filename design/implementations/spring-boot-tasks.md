@@ -1,6 +1,6 @@
 # Spring Boot 단계별 구현 task
 
-Status: Task 1–11 구현·자동 시험 완료 · reservation 저장·replay 명명 정리 · 2026-09-15
+Status: Task 1–12 구현·자동 시험 완료 · 제품 seed 책임 분리 · 2026-09-15
 
 실행 명령은 [사용 가이드](../../java/spring-boot/README.md), 시험 결과·미검증은
 [검증 기록](spring-boot-verification.md)이 소유합니다.
@@ -19,6 +19,7 @@ Status: Task 1–11 구현·자동 시험 완료 · reservation 저장·replay �
 | 9 JPA 전환 | Boot 관리 JPA·Hibernate, 기존 H2 schema·계약 보존 | strict clean test bootJar, 34개·11 suites·실패 0 |
 | 10 코드 읽기 비용 개선 | Problem 직접 생성·입력 의미 명시·예약 전용 오류 분기 제거·claim 판별명·표현 정리 | strict clean test bootJar, 35개·11 suites·실패 0 |
 | 11 reservation 저장·replay 명명 | paired reservation/replay 저장과 입력 일치 replay 조회를 메서드 이름에 명시 | 기존 strict clean test bootJar |
+| 12 제품 seed 책임 분리 | public ProductSeedService transaction과 concrete ProductSeedRepository로 이동 | 음수·신규·반복 stock·proxy와 기존 전체 시험 |
 
 ## 단계별 commit
 
@@ -71,3 +72,13 @@ Java 구현의 JdbcClient 저장 경계를 JPA entity·Spring Data repository로
 paired persist·flush와 key/product mismatch 판단은 기존 repository에 남겼고,
 transaction proxy·rollback 뒤 `ReservationAttempts`의 fresh read 경계는 변경하지 않았습니다.
 이름 변경을 복제하는 새 테스트 없이 기존 전체 Spring 시험으로 검증했습니다.
+
+## Task 12. 제품 seed 책임 분리
+
+`ProductSeedService.seed`가 음수 검증과 public `@Transactional(rollbackFor = Exception.class)`
+경계를 소유하고, concrete `ProductSeedRepository.seedIfAbsent`가 기존 `ProductRepository` 조회와
+`EntityManager.persist`를 조합합니다. 두 Bean은 `!no-db` profile과 생성자 주입을 사용합니다.
+
+`SeedConfiguration`과 JPA test helper의 호출을 새 소유자로 옮기고 `ReservationService`와
+`ReservationRepository`에서 seed를 제거했습니다. find-then-persist와 반복 seed의 기존 stock 보존,
+예약 transaction·`ReservationAttempts` 복구 경계는 유지했습니다.

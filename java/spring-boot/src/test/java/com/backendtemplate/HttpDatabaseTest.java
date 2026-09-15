@@ -1,6 +1,7 @@
 package com.backendtemplate;
 
 import static org.assertj.core.api.Assertions.*;
+import com.backendtemplate.services.ProductSeedService;
 import com.backendtemplate.services.ReservationService;
 import com.zaxxer.hikari.HikariDataSource;
 import java.net.URI;
@@ -266,9 +267,14 @@ class HttpDatabaseTest {
     }
 
     @Test
-    void seedPreservesStockAndServiceIsProxied() {
-        var service = app.getBean(ReservationService.class);
-        assertThat(org.springframework.aop.support.AopUtils.isAopProxy(service)).isTrue();
-        assertThat(service.seed("demo", 99)).isEqualTo(1);
+    void seedPreservesStockRejectsNegativeAndServicesAreProxied() {
+        var reservations = app.getBean(ReservationService.class);
+        var seed = app.getBean(ProductSeedService.class);
+        assertThat(org.springframework.aop.support.AopUtils.isAopProxy(reservations)).isTrue();
+        assertThat(org.springframework.aop.support.AopUtils.isAopProxy(seed)).isTrue();
+        assertThat(seed.seed("demo", 99)).isEqualTo(1);
+        assertThat(seed.seed("seeded", 2)).isEqualTo(2);
+        assertThat(seed.seed("seeded", 99)).isEqualTo(2);
+        assertThatIllegalArgumentException().isThrownBy(() -> seed.seed("invalid", -1));
     }
 }

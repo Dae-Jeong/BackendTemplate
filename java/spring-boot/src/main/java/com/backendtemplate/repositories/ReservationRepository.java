@@ -67,10 +67,4 @@ public class ReservationRepository {
         entities.flush();
     }
 
-    public int seed(String productId, int stock) {
-        return products.findById(productId).map(ProductEntity::available).orElseGet(() -> {
-            entities.persist(new ProductEntity(productId, stock));
-            return stock;
-        });
-    }
 }

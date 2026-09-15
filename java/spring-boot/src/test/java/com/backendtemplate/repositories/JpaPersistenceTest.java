@@ -42,7 +42,7 @@ class JpaPersistenceTest {
                         "--spring.jpa.properties.hibernate.jdbc.batch_size=16",
                         "--spring.jpa.properties.hibernate.order_inserts=true")) {
             var service = app.getBean(com.backendtemplate.services.ReservationService.class);
-            service.seed("batch", 2);
+            app.getBean(com.backendtemplate.services.ProductSeedService.class).seed("batch", 2);
             var first = service.reserve("batch", "first");
             assertThat(service.replay("batch", "first").reservation()).isEqualTo(first.reservation());
             try (var connection = DriverManager.getConnection(url, "sa", ""); var sql = connection.createStatement()) {
@@ -95,24 +95,28 @@ class JpaPersistenceTest {
     @TestConfiguration(proxyBeanMethods = false)
     static class WorkConfiguration {
         @Bean
-        Work work(ReservationRepository repository, ProductRepository products, EntityManager entities) {
-            return new Work(repository, products, entities);
+        Work work(ReservationRepository repository, ProductSeedRepository seeds,
+                ProductRepository products, EntityManager entities) {
+            return new Work(repository, seeds, products, entities);
         }
     }
 
     static class Work {
         private final ReservationRepository repository;
+        private final ProductSeedRepository seeds;
         private final ProductRepository products;
         private final EntityManager entities;
-        Work(ReservationRepository repository, ProductRepository products, EntityManager entities) {
+        Work(ReservationRepository repository, ProductSeedRepository seeds,
+                ProductRepository products, EntityManager entities) {
             this.repository = repository;
+            this.seeds = seeds;
             this.products = products;
             this.entities = entities;
         }
 
         @Transactional
         public void decreaseWithManagedProduct() {
-            repository.seed("fresh", 2);
+            seeds.seedIfAbsent("fresh", 2);
             var before = products.findById("fresh").orElseThrow();
             assertThat(entities.contains(before)).isTrue();
             repository.decreaseStock("fresh");

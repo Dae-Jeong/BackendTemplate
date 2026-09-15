@@ -33,14 +33,6 @@ public class ReservationService {
         return new ReservationResult(reservation, false);
     }
 
-    @Transactional(rollbackFor = Exception.class)
-    public int seed(String productId, int stock) {
-        if (stock < 0) {
-            throw new IllegalArgumentException("Stock must be nonnegative");
-        }
-        return repository.seed(productId, stock);
-    }
-
     @Transactional(readOnly = true, rollbackFor = Exception.class)
     public ReservationResult replay(String productId, String key) {
         return new ReservationResult(repository.findMatchingReplay(key, productId).orElseThrow(), true);

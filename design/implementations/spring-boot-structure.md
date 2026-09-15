@@ -27,7 +27,7 @@ flowchart LR
 | config/AppProperties, PoolProperties | 환경·pool 입력 검증 |
 | config/ClockConfiguration | Clock Bean |
 | config/TransactionConfiguration | 단일 JpaTransactionManager·rollback-on-commit-failure·listener |
-| config/SeedConfiguration | 명시적 CLI seed의 입력과 호출 |
+| config/SeedConfiguration | 명시적 CLI seed의 입력과 ProductSeedService 호출 |
 | config/OpenApiConfiguration | 공개 Problem schema·오류 응답 문서 |
 | controllers | HTTP 입력·업무 호출·외부 DTO 변환 |
 | dto | ApiResponse, GreetingResponse, ReserveRequest, ReservationResponse, Problem, FieldError |
@@ -35,9 +35,11 @@ flowchart LR
 | http/ApiExceptionHandler, FallbackErrorController | 공개 오류 번역·프로토콜 헤더 |
 | http/RequestContextFilter | 서버 request ID·MDC·Servlet 완료 관측 |
 | services/GreetingService | Clock을 사용한 내부 Greeting 생성 |
-| services/ReservationService | public transaction·예약/seed/replay |
+| services/ReservationService | public transaction·예약/replay |
+| services/ProductSeedService | public transaction·음수 검증·제품 seed 흐름 |
 | services/ReservationAttempts | unique claim 실패 transaction 종료 뒤 재생 transaction 호출 |
-| repositories/ReservationRepository | entity persist·claim flush·contract 변환·저장 조합 |
+| repositories/ReservationRepository | entity persist·claim flush·contract 변환·예약 저장 조합 |
+| repositories/ProductSeedRepository | 기존 제품 조회·없는 ProductEntity persist |
 | repositories/ProductRepository, ReservationReplayRepository | Spring Data 조회·존재 확인·조건부 JPQL 재고 차감 |
 | repositories/*Entity, UtcTimestampConverter | 기존 H2 table·FK association·VARCHAR UTC timestamp mapping |
 | contracts | 프레임워크 독립적인 Greeting, Reservation, ReservationResult |

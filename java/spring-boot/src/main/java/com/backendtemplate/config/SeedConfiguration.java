@@ -1,6 +1,6 @@
 package com.backendtemplate.config;
 
-import com.backendtemplate.services.ReservationService;
+import com.backendtemplate.services.ProductSeedService;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import org.springframework.boot.ApplicationRunner;
@@ -21,7 +21,7 @@ public class SeedConfiguration {
             @Min(0) int stock) {}
 
     @Bean
-    ApplicationRunner seedProduct(ReservationService service, SeedProperties properties) {
+    ApplicationRunner seedProduct(ProductSeedService service, SeedProperties properties) {
         return args -> {
             int available = service.seed(properties.productId(), properties.stock());
             System.out.println("{\"product_id\":\"" + properties.productId() + "\",\"available\":" + available + "}");

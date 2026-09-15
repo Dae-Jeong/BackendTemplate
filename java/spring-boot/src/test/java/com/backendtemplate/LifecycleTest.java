@@ -25,6 +25,8 @@ class LifecycleTest {
             assertThat(app.getBeansOfType(jakarta.persistence.EntityManagerFactory.class)).isEmpty();
             assertThat(app.getBeansOfType(org.springframework.transaction.PlatformTransactionManager.class)).isEmpty();
             assertThat(app.getBeansOfType(com.backendtemplate.repositories.ProductRepository.class)).isEmpty();
+            assertThat(app.getBeansOfType(com.backendtemplate.repositories.ProductSeedRepository.class)).isEmpty();
+            assertThat(app.getBeansOfType(com.backendtemplate.services.ProductSeedService.class)).isEmpty();
             int port = ((WebServerApplicationContext) app).getWebServer().getPort();
             for (String path : new String[]{"/health/live", "/health/ready", "/metrics", "/openapi.json"}) {
                 var response = client.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))

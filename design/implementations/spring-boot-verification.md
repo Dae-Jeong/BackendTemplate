@@ -1,6 +1,6 @@
 # Spring Boot 검증 기록
 
-Status: 실제 구현·검증 및 reservation 명명 정리 결과 · 2026-09-15
+Status: 실제 구현·검증 및 제품 seed 책임 분리 결과 · 2026-09-15
 
 실행 가이드는 [README](../../java/spring-boot/README.md), 선택·transaction 의미는
 [구현 설계](spring-boot.md)가 소유합니다. FastAPI 시험 통과를 Java의 검증 증거로 사용하지 않습니다.
@@ -78,6 +78,18 @@ H2 claim table의 단일 PK·Hibernate INSERT SQL에 의존하는 기존 분류 
 replay mismatch, proxy commit/rollback과 `ReservationAttempts`의 rollback 뒤 fresh read를 재검증했습니다.
 격리 Temurin 25.0.4.1에서 `./gradlew clean test bootJar --no-daemon --console=plain`은
 35개·11 suites·실패/오류/skip 0으로 통과했습니다. 기본 환경의 Java 25 미탐지는 코드 실패와 구분합니다.
+
+## Task 12 제품 seed 책임 분리 검증
+
+새 `ProductSeedService`의 실제 Spring proxy, 음수 거절, 신규 stock 반환과 반복 실행의 기존 stock 보존을
+`HttpDatabaseTest`에서 확인했습니다. `JpaPersistenceTest`는 concrete `ProductSeedRepository`를 주입해
+pending insert 뒤 bulk update의 flush·detach 의미를 계속 검증합니다. `LifecycleTest`는 no-db에서
+새 Service와 Repository가 등록되지 않음을 확인합니다. 세 focused suite 18개와
+격리 Temurin 25.0.4.1의 strict clean test/bootJar 전체 35개·11 suites를 실패 없이 통과했습니다.
+
+`SeedConfiguration`은 새 Service를 호출하며 예약 Service/Repository에는 seed 호출이 남지 않습니다.
+find-then-persist 의미만 유지하며 동시 seed upsert를 주장하거나 새 migration을 추가하지 않았습니다.
+예약 commit/rollback·fresh replay read와 기존 transaction metrics는 전체 시험으로 재검증했습니다.
 
 ## Task 9 JPA 검증
 
