@@ -6,6 +6,8 @@
 
 ## 현재 제공 범위
 
+추가 준비 중인 [Prisma·Rails 작업 단계](prisma-rails-tasks.md)는 구현 완료 범위와 구분합니다.
+
 | 구현 | 실행 | 설계·구조 | 작업·검증 |
 | --- | --- | --- | --- |
 | Python / FastAPI | [로컬 실행](quickstart.md) · [환경·명령](../../python/fastapi/README.md) | [설계](fastapi.md) · [구조](fastapi-structure.md) | [Task](fastapi-tasks.md) · [검증](fastapi-verification.md) |

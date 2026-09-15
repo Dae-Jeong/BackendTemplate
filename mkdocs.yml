@@ -84,6 +84,7 @@ nav:
           - Backend: design/backend.md
           - Runtime과 성능: design/runtime-review.md
   - 작업·검증 기록:
+      - Prisma·Rails 준비: design/implementations/prisma-rails-tasks.md
       - FastAPI:
           - 검증 결과와 재현: design/implementations/fastapi-verification.md
           - 완료 작업과 후속 범위: design/implementations/fastapi-tasks.md
