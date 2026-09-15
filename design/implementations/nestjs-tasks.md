@@ -168,3 +168,21 @@ DB에 저장된 idempotency 응답 JSON을 신뢰하지 않고 필수 shape·필
 - 기존 정상 snapshot은 값 변경 없이 재생되고 새 저장도 같은 snake_case JSON 형식을 사용합니다.
 - 손상된 shape·ID 타입·날짜의 실제 SQLite row는 HTTP 500이며 재고·예약·멱등 키 추가 쓰기가 없고 transaction 결과는 기존 경계에서 계측됩니다.
 - focused unit/실제 DB HTTP 시험과 전체 build·typecheck·lint·format·test·test:e2e 결과가 검증 기록에 남습니다.
+
+## Task 13. 예약 저장 사실과 업무 검증 책임 분리
+
+목표:
+Repository가 SQL과 저장 사실만 소유하도록 replay·재고 결과를 typed 값으로 반환하고,
+멱등 입력 일치와 상품 존재 조건을 Service가 호출하는 순수 업무 검증 함수로 분리합니다.
+
+예상 결과:
+
+- `findReplay`는 저장 key의 원본 `productId`와 decoder를 통과한 `reservation`을 함께 반환하며 입력 충돌을 판정하지 않습니다.
+- 조건부 재고 차감과 상품 존재 조회는 boolean 사실을 반환하고 Repository에서 예약 업무 예외가 발생하지 않습니다.
+- Service는 replay 입력 일치와 상품 존재 순수 검증을 호출하고, 실제 원자 차감 실패 뒤 존재하는 상품의 `SoldOut`만 직접 결정합니다.
+- snapshot decoder·unknown 입력, 응답·재생, clock·metrics·transaction·seed·동시성·복구 계약과 전체 회귀 시험이 유지됩니다.
+
+실제 결과:
+`validation/reservations.ts`를 Nest Provider가 아닌 일반 함수 모듈로 추가했고 Repository의 업무 예외 의존을 제거했습니다.
+저장 key의 원본 `productId`를 nested snapshot과 별도로 보존하는 `ReservationReplay` 계약과 실제 SQLite 회귀 시험을 추가했습니다.
+실행 명령·시험 수·유지한 실제 SQLite와 독립 프로세스 범위는 [검증 기록](nestjs-verification.md#task-13-검증--2026-09-16)이 소유합니다.

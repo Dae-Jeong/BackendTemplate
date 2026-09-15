@@ -6,6 +6,11 @@ import { ReservationsRepository } from '../repositories/reservations.repository.
 import { CLOCK } from '../contracts/clock.contract.js';
 import type { Clock } from '../contracts/clock.contract.js';
 import type { ReservationResult } from '../contracts/reservations.contract.js';
+import { SoldOut } from '../exceptions/reservations.error.js';
+import {
+  validateProductExists,
+  validateReplayInput,
+} from '../validation/reservations.js';
 
 @Injectable()
 export class ReservationsService {
@@ -27,14 +32,24 @@ export class ReservationsService {
     productId: string,
     key: string,
   ): Promise<ReservationResult> {
-    const existing = await this.repository.findMatchingReplay(
+    const replay = await this.repository.findReplay(client, key);
+    if (replay) {
+      return {
+        reservation: validateReplayInput(replay, productId),
+        replayed: true,
+      };
+    }
+
+    const stockDecreased = await this.repository.decreaseStock(
       client,
-      key,
       productId,
     );
-    if (existing) return { reservation: existing, replayed: true };
-
-    await this.repository.decreaseStock(client, productId);
+    if (!stockDecreased) {
+      validateProductExists(
+        await this.repository.productExists(client, productId),
+      );
+      throw new SoldOut();
+    }
     const reservation = {
       reservationId: randomUUID().replaceAll('-', ''),
       productId,

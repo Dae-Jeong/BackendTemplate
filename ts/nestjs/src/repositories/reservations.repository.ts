@@ -6,48 +6,51 @@ import {
   reservations,
   idempotencyKeys,
 } from '../models/reservations.schema.js';
-import type { Reservation } from '../contracts/reservations.contract.js';
+import type {
+  Reservation,
+  ReservationReplay,
+} from '../contracts/reservations.contract.js';
 import {
   decodeReservationSnapshot,
   encodeReservationSnapshot,
 } from '../models/reservation-snapshot.js';
-import {
-  ProductNotFound,
-  SoldOut,
-  IdempotencyConflict,
-} from '../exceptions/reservations.error.js';
 
 @Injectable()
 export class ReservationsRepository {
-  async findMatchingReplay(
+  async findReplay(
     client: TransactionClient,
     key: string,
-    productId: string,
-  ): Promise<Reservation | undefined> {
+  ): Promise<ReservationReplay | undefined> {
     const [existing] = await client
       .select()
       .from(idempotencyKeys)
       .where(eq(idempotencyKeys.key, key));
     if (!existing) return undefined;
-    if (existing.productId !== productId) throw new IdempotencyConflict();
-    return decodeReservationSnapshot(existing.response);
+    return {
+      storedProductId: existing.productId,
+      reservation: decodeReservationSnapshot(existing.response),
+    };
   }
   async decreaseStock(
     client: TransactionClient,
     productId: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const changed = await client
       .update(products)
       .set({ available: sql`${products.available} - 1` })
       .where(and(eq(products.id, productId), gt(products.available, 0)))
       .returning({ id: products.id });
-    if (changed.length) return;
+    return changed.length > 0;
+  }
+  async productExists(
+    client: TransactionClient,
+    productId: string,
+  ): Promise<boolean> {
     const existing = await client
       .select({ id: products.id })
       .from(products)
       .where(eq(products.id, productId));
-    if (!existing.length) throw new ProductNotFound();
-    throw new SoldOut();
+    return existing.length > 0;
   }
   async saveReservation(
     client: TransactionClient,

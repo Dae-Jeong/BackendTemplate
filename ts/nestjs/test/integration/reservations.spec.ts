@@ -47,6 +47,27 @@ describe('real SQLite reservations', () => {
     );
     expect(await state(app)).toEqual([[0, 1, 1]]);
   });
+  it('uses the stored key product as authoritative replay input', async () => {
+    await reserve(app).expect(201);
+    await seed(app, 'other', 1);
+    const before = await state(app);
+    const primary = app.get(Primary);
+    const connection = await primary.acquire();
+    try {
+      await connection.query(
+        'update idempotency_keys set product_id = ? where key = ?',
+        ['other', 'key-1'],
+        'run',
+      );
+    } finally {
+      await primary.release(connection);
+    }
+
+    const response = await reserve(app).expect(409);
+    expect(response.body.code).toBe('IDEMPOTENCY_CONFLICT');
+    expect(response.headers['idempotency-replayed']).toBeUndefined();
+    expect(await state(app)).toEqual(before);
+  });
   it.each([
     ['invalid shape', { reservation_id: 'reservation-1' }],
     [

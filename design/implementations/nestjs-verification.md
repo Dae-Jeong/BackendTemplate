@@ -255,6 +255,35 @@ decoder는 필수 snake_case 필드 세 개, 비어 있지 않은 문자열 ID�
 동일 키 충돌, rollback, worker 직렬화와 독립 프로세스 복구 시험도 전체 suite에서 다시 통과했습니다.
 실행 중인 서비스·공유 DB·컨테이너·migration은 변경하지 않았고 시험은 OS 임시 SQLite 파일만 사용했습니다.
 
+## Task 13 검증 — 2026-09-16
+
+Repository의 `findMatchingReplay`를 저장 사실만 반환하는 `findReplay`로 바꾸고,
+저장 key의 원본 `productId`와 snapshot decoder를 통과한 `Reservation`을 `ReservationReplay`로 함께 반환합니다.
+조건부 `decreaseStock`과 별도 `productExists`는 boolean만 반환하며 Repository는
+`ProductNotFound`·`SoldOut`·`IdempotencyConflict`를 import하거나 발생시키지 않습니다.
+Service는 같은 transaction client로 조회와 쓰기를 순서화하고 `validation/reservations.ts`의 일반 함수로
+replay 입력 일치와 상품 존재를 검사합니다. 실제 조건부 차감 실패 뒤 상품이 존재할 때의 `SoldOut`은 Service에 남겼습니다.
+
+`ts/nestjs/`에서 고정 Node·pnpm wrapper로 수행한 결과입니다.
+
+| 명령 | 결과 |
+| --- | --- |
+| `node scripts/toolchain.mjs exec vitest run test/integration/reservations.spec.ts` | 1 file, 15 tests 통과 |
+| `node scripts/toolchain.mjs format` | Prettier 실행 완료 |
+| `node scripts/toolchain.mjs install --frozen-lockfile` | 통과, lockfile 변경 없음 |
+| `node scripts/toolchain.mjs build` | 통과 |
+| `node scripts/toolchain.mjs typecheck` | 통과 |
+| `node scripts/toolchain.mjs lint` | 통과 |
+| `node scripts/toolchain.mjs test` | 8 files, 65 tests 통과 |
+| `node scripts/toolchain.mjs test:e2e` | 2 files, 15 tests 통과 |
+
+새 실제 SQLite 회귀는 정상 예약 뒤 FK가 유효한 다른 상품을 만들고 idempotency key의 저장 `product_id`만
+nested snapshot과 다르게 바꿉니다. 원래 입력 재요청은 nested JSON이 아니라 authoritative column을 기준으로
+`IDEMPOTENCY_CONFLICT` 409를 반환하며 replay header가 없고 재고 합계·예약·멱등 row 수는 요청 전과 같습니다.
+기존 64개 시험은 삭제·완화하지 않고 이 회귀 한 개를 추가했으며, snapshot의 `unknown` decoder와 저장 형식,
+seed의 no-reset, clock, transaction runner, metrics, 원자 차감, rollback·worker 종료·독립 프로세스 동시성·복구 시험을 다시 통과했습니다.
+실행 중인 서비스·공유 DB·컨테이너·migration은 변경하지 않았고 시험은 OS 임시 SQLite 파일만 사용했습니다.
+
 ## 미검증 범위
 
 실제 OS stdout 고장·디스크 장애·네트워크 파일시스템·PostgreSQL·운영 인증·외부 SDK·부하 p95/p99·비용은 미검증입니다.

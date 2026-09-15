@@ -1,6 +1,6 @@
 # NestJS 폴더 구조와 활용 기준
 
-Status: 실제 구현 배치 · SQLite 예약과 저장 snapshot 검증 경계 구현·검증 · 2026-09-16
+Status: 실제 구현 배치 · SQLite 예약 저장 사실과 순수 업무 검증 경계 구현·검증 · 2026-09-16
 
 이 문서는 폴더·파일 역할과 의존 방향을 소유합니다.
 Nest 조립·수명·프로토콜 선택은 [구현 설계](nestjs.md), 진행 단계는 [작업 계획](nestjs-tasks.md)에 있습니다.
@@ -15,7 +15,7 @@ Nest의 Controller·Provider·Module 구분을 사용하면서 물리 폴더를 
 
 ```mermaid
 flowchart LR
-    ROOT["ts/nestjs/"] --> SRC["src/<br/>조립: main.ts · app.module.ts<br/>bootstrap/ · config/ · providers/<br/>HTTP: controllers/ · dto/ · http/<br/>업무: services/ · contracts/ · exceptions/"]
+    ROOT["ts/nestjs/"] --> SRC["src/<br/>조립: main.ts · app.module.ts<br/>bootstrap/ · config/ · providers/<br/>HTTP: controllers/ · dto/ · http/<br/>업무: services/ · validation/ · contracts/ · exceptions/"]
     ROOT --> TEST["test/<br/>소스 밖 시험"]
     ROOT --> TOOLS["생성·빌드 설정<br/>package.json · lockfile"]
 ```
@@ -30,10 +30,12 @@ flowchart LR
 | `config/settings.ts` | 환경 입력의 검증·기본값·설정 타입 | 업무에서 호출하는 전역 env getter |
 | `controllers/*.controller.ts` | HTTP 입력·업무 호출·응답 변환 | SQL·업무 트랜잭션 |
 | `services/*.service.ts` | 업무 순서·정합성·트랜잭션 경계 | Request/Response·외부 응답 DTO |
+| `validation/*.ts` | typed 사실을 받는 순수 업무 조건 검사 | DB 조회·쓰기·transaction·Nest Provider |
 | `dto/*.request.dto.ts`, `*.response.dto.ts` | 외부 필드·검증·OpenAPI metadata | DB entity의 그대로 노출 |
 | `contracts/*.contract.ts` | 내부 결과·필요한 호출 계약·해당 DI 토큰 | 구현 클래스의 재수출 |
 | `providers/*.provider.ts` | 함수·외부 구현의 Provider binding | 모든 Service를 포장하는 별도 Provider 클래스 |
 | `database/transaction-runner.ts` | 업무 callback의 Primary lease·immediate transaction·결과 계측·기술 busy 번역 | 업무 순서·retry/options·HTTP transaction |
+| `repositories/*.repository.ts` | transaction client로 SQL을 실행하고 typed 저장 사실을 반환 | 업무 조건 판정·업무 오류 발생·독립 commit |
 | `models/reservation-snapshot.ts` | 저장 JSON의 필수 shape·문자열·canonical UTC 시각 검증과 encode/decode | HTTP DTO·업무 정책·범용 validation framework |
 | `http/` | Problem 변환·HTTP 관측·공개 응답 표현 | 업무 정책 |
 | `exceptions/*.error.ts` | 기능 소유 오류 타입과 필요한 업무 정보 | HTTP status·로그 출력 |
@@ -51,10 +53,16 @@ DI용 `Symbol`은 런타임 값이므로 일반 import를 사용합니다.
 
 ```mermaid
 flowchart LR
-    CONTROLLER["greetings.controller.ts"] --> SERVICE["greetings.service.ts"]
-    CONTROLLER --> DTO["greetings.*.dto.ts"]
-    CONTROLLER --> CONTRACT["greetings.contract.ts"]
+    CONTROLLER["*.controller.ts"] --> SERVICE["*.service.ts"]
+    CONTROLLER --> DTO["*.dto.ts"]
+    CONTROLLER --> CONTRACT["*.contract.ts"]
     SERVICE --> CONTRACT
+    SERVICE --> VALIDATION["validation/*.ts<br/>순수 업무 조건"]
+    SERVICE --> REPOSITORY["repositories/*.repository.ts<br/>typed 저장 사실"]
+    VALIDATION --> CONTRACT
+    VALIDATION --> ERROR["exceptions/*.error.ts"]
+    REPOSITORY --> CONTRACT
+    REPOSITORY --> MODEL["models/*.ts"]
     SERVICE --> CLOCK["clock.contract.ts · Clock + CLOCK"]
     PROVIDER["clock.provider.ts"] --> CLOCK
     MODULE["app.module.ts"] --> PROVIDER
@@ -94,6 +102,7 @@ Nest는 순환 의존용 `forwardRef()`를 제공하지만 이 템플릿은 호�
 | DB 기반 | `database/`의 연결·수명 파일, 도구가 생성한 migration 경로 | pool과 schema 변경은 업무 파일 밖에서 관리합니다. |
 | 업무 transaction 실행 | `database/transaction-runner.ts` | 업무에서 분리한 lease·transaction·계측·기술 오류 실행 경계를 한 injectable provider로 둡니다. |
 | 예약 | `repositories/reservations.repository.ts`, `models/`의 저장 모델 | transaction client를 받아 저장하고 내부 결과로 반환합니다. |
+| 예약 업무 검증 | `validation/reservations.ts` | Repository가 반환한 typed replay·boolean에만 의존하는 순수 함수를 둡니다. |
 | 예약 계약 | Controller·Service·DTO·contract·error의 `reservations` 파일 | 기존 역할 폴더에서 같은 기능명으로 연결합니다. |
 | feature Module | `modules/*.module.ts` | 공개 Provider와 수명 경계가 생긴 기능만 분리합니다. |
 
@@ -107,6 +116,10 @@ JSON column은 DB에서 읽는 동안 `unknown`이며 `models/reservation-snapsh
 `sqlite.worker.ts`는 better-sqlite3 실행을 소유합니다. `database/transaction-runner.ts`는
 Primary lease와 immediate transaction의 실행·outcome metric·busy 번역을 소유하고 database 소유 `TransactionClient`를 callback에 전달합니다.
 Repository는 이 client를 인자로 받고 Service는 업무 callback만 구성합니다. runner에는 options·retry·replica 선택을 추가하지 않았습니다.
+예약 Repository의 `findReplay`는 저장 key의 `productId`와 decoder를 통과한 `reservation`을 함께 반환하고,
+조건부 재고 차감과 상품 존재 조회는 boolean 사실만 반환합니다. Service는 이 사실을 `validation/reservations.ts`의
+순수 함수에 전달해 replay 입력 일치와 상품 존재를 검사하며, 원자 차감이 실제 실패한 뒤의 `SoldOut`은 Service가 결정합니다.
+검증 함수는 DB·transaction·Nest DI를 모르며 별도 `Injectable` wrapper를 두지 않습니다.
 `contracts/observation.contract.ts`는 HTTP·로그·metrics가 함께 쓰는 숫자 status와 한정 결과 타입을 소유합니다.
 빈 BaseRepository·범용 RPC framework는 만들지 않았습니다.
 Dockerfile·환경 예시는 `ts/nestjs/`가, 공통 Compose·모니터링 설정은 저장소 루트가 소유합니다.
