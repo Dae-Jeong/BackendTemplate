@@ -11,11 +11,11 @@
 | FastAPI + FastCRUD | `python/fastapi-fastcrud/` | uv · SQLite/FastCRUD | 전체 예약 계약, 네이티브만 제공 · [실행·검증](python/fastapi-fastcrud/README.md) |
 | NestJS | `ts/nestjs/` | pnpm · SQLite/Drizzle | 전체 예약 계약 · [실행·검증](ts/nestjs/README.md) |
 | Spring Boot | `java/spring-boot/` | Gradle Wrapper · H2/JPA | 전체 예약 계약 · [실행·검증](java/spring-boot/README.md) |
+| Kotlin Spring Boot | `kotlin/spring-boot/` | Gradle Kotlin DSL · H2/JPA | 전체 예약 계약 native 구현, 독립 검토 대기·Compose 미구현 · [실행](kotlin/spring-boot/README.md) · [검증](design/implementations/kotlin-spring-boot-verification.md) |
 | Rails | `ruby/rails/` | Bundler · SQLite/Active Record | 인사·health·조건부 재고 예약까지, 멱등성·metrics·Compose는 미구현 · [실행·검증](ruby/rails/README.md) |
 
-Kotlin Spring Boot는 [설계](design/implementations/kotlin-spring-boot.md) ·
-[구조](design/implementations/kotlin-spring-boot-structure.md) · [Task](design/implementations/kotlin-spring-boot-tasks.md)까지 확정하고
-`kotlin/spring-boot/`에 구현 중입니다. 실행·검증 안내가 생기기 전에는 서비스 추출 대상으로 선택하지 않습니다.
+Kotlin Spring Boot의 Task 1–8 구현·38개 자동 시험·native 18093 재시작 검증은 완료됐습니다.
+다만 독립 검토 전이므로 최종 수락 상태로 표기하지 않으며, container·Compose는 제공하지 않고 18094만 후속 게시 포트로 예약합니다.
 
 처음에는 저장소 구조를 그대로 가져오고 선택한 구현만 실행합니다. 독립 프로젝트로 추출할 때는
 해당 디렉터리의 소스·테스트·migration·스크립트·도구 버전 파일·lockfile을 함께 가져갑니다.
@@ -30,8 +30,10 @@ DB 없는 실행을 지원하는 구현에서 그 경계를 먼저 확인한 뒤
 각 구현이 현재 제공하는 예약 범위까지 확인합니다.
 
 - 공통으로 `/health/ready`와 정상·입력 오류 응답을 확인하고, docs endpoint는 각 가이드에 제공된 구현에서만 확인합니다.
-- FastAPI, FastAPI + FastCRUD, NestJS, Java Spring Boot는 DB 활성 후 201 예약·같은 키 replay·`Idempotency-Replayed: true`를 확인합니다.
-- 위 네 구현은 `/metrics`와 JSON 로그를 확인합니다. 수집 화면이 필요하면 [로컬 모니터링](design/implementations/local-monitoring.md)의 연결 대상인지 먼저 확인합니다.
+- FastAPI, FastAPI + FastCRUD, NestJS, Java Spring Boot와 독립 검토 전 Kotlin Spring Boot는 DB 활성 후
+  201 예약·같은 키 replay·`Idempotency-Replayed: true`를 확인합니다.
+- 위 구현은 `/metrics`와 JSON 로그를 확인합니다. 수집 화면이 필요하면 [로컬 모니터링](design/implementations/local-monitoring.md)의 연결 대상인지 먼저 확인하며,
+  Compose가 없는 Kotlin을 제공된 수집 대상으로 가정하지 않습니다.
 - Rails는 조건부 재고 차감·예약 생성·조회만 확인하고, 멱등성·metrics·Compose 검증을 요구하지 않습니다.
 
 기본 포트는 구현별 실행 가이드에 있습니다. 같은 템플릿으로 여러 서비스를 띄울 때는 포트뿐 아니라
@@ -65,6 +67,7 @@ Compose 프로젝트 이름·데이터 volume·모니터링 수집 대상도 서
 | FastAPI + FastCRUD | [구현 설계·저장 경계](design/implementations/fastapi-fastcrud.md) |
 | NestJS | [폴더와 역할](design/implementations/nestjs-structure.md) · [구현 설계](design/implementations/nestjs.md) |
 | Spring Boot | [폴더와 역할](design/implementations/spring-boot-structure.md) · [트랜잭션 내부 동작](design/implementations/spring-boot-internals.md) |
+| Kotlin Spring Boot | [폴더와 역할](design/implementations/kotlin-spring-boot-structure.md) · [Kotlin 구현 설계](design/implementations/kotlin-spring-boot.md) |
 | Rails | [폴더와 역할](design/implementations/rails-structure.md) · [구현 설계](design/implementations/rails.md) |
 
 예약 예제는 실제 업무가 연결된 후 관련 API·seed·테스트·문서를 함께 교체합니다.

@@ -64,6 +64,7 @@ nav:
       - FastAPI + FastCRUD 실행: python/fastapi-fastcrud/README.md
       - NestJS 실행: ts/nestjs/README.md
       - Spring Boot 실행: java/spring-boot/README.md
+      - Kotlin Spring Boot native 실행: kotlin/spring-boot/README.md
       - Rails 실행: ruby/rails/README.md
       - 로컬 모니터링: design/implementations/local-monitoring.md
       - FastAPI 서비스 적용: design/implementations/service-guide.md
@@ -85,7 +86,7 @@ nav:
           - 로직과 내부 동작: design/implementations/spring-boot-internals.md
           - 구현 설계: design/implementations/spring-boot.md
           - 폴더와 역할: design/implementations/spring-boot-structure.md
-      - Kotlin Spring Boot (구현 중):
+      - Kotlin Spring Boot (독립 검토 대기):
           - 구현 설계: design/implementations/kotlin-spring-boot.md
           - 폴더와 역할: design/implementations/kotlin-spring-boot-structure.md
       - Rails:
@@ -108,8 +109,9 @@ nav:
       - Spring Boot:
           - 검증 결과와 재현: design/implementations/spring-boot-verification.md
           - 단계별 작업: design/implementations/spring-boot-tasks.md
-      - Kotlin Spring Boot (구현 중):
-          - 미구현 단계별 작업: design/implementations/kotlin-spring-boot-tasks.md
+      - Kotlin Spring Boot (독립 검토 대기):
+          - 검증 결과와 재현: design/implementations/kotlin-spring-boot-verification.md
+          - 구현 단계와 후속 범위: design/implementations/kotlin-spring-boot-tasks.md
       - Rails:
           - 검증 결과와 재현: design/implementations/rails-verification.md
           - 단계별 작업: design/implementations/rails-tasks.md
