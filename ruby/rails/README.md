@@ -1,6 +1,6 @@
 # Rails 시작점
 
-Status: Task 1~2 최소 API 앱 구현·네이티브 검증 완료 · 2026-09-15
+Status: Task 1~3 최소 저장 API·네이티브 검증 완료 · 2026-09-15
 
 Ruby 4.0.6, Rails 8.1.3.1, Active Record와 SQLite를 사용하는 독립 API 앱입니다.
 `.ruby-version`, `Gemfile`, `Gemfile.lock`이 도구와 gem 버전을 고정합니다. 시스템 Ruby나
@@ -27,6 +27,7 @@ cp -n .env.example .env
 set -a
 . ./.env
 set +a
+bin/rails db:migrate
 ./bin/start
 ```
 
@@ -35,11 +36,17 @@ set +a
 
 ```sh
 curl -fsS 'http://127.0.0.1:18088/v1/greetings?name=Marin'
+curl -fsS -X POST http://127.0.0.1:18088/v1/reservations \
+  -H 'Content-Type: application/json' \
+  -d '{"product_id":"product-1"}'
+curl -fsS http://127.0.0.1:18088/v1/reservations/{reservation_id}
 curl -fsS http://127.0.0.1:18088/health/live
 curl -fsS http://127.0.0.1:18088/health/ready
 ```
 
 - `GET /v1/greetings`: String `name`을 trim한 뒤 1~80자로 검증하고 `data.message`, UTC `data.generated_at`을 반환합니다. 누락은 `REQUIRED`, 공백만 있으면 `TOO_SHORT`, 배열·객체 query는 `INVALID_TYPE` 422입니다.
+- `POST /v1/reservations`: JSON body의 String `product_id`를 trim해 1~128자로 검증하고 SQLite에 저장한 뒤 `data.reservation_id`, `data.product_id`, UTC `data.created_at`을 201로 반환합니다. 알 수 없는 body field는 버리지 않고 422로 거절합니다.
+- `GET /v1/reservations/:reservation_id`: 32자리 소문자 hex ID를 검증하고 저장한 예약을 반환합니다. 형식 오류는 422, 없는 예약은 404입니다.
 - `GET /health/live`: 프로세스 생존을 `{"status":"alive"}`로 반환합니다.
 - `GET /health/ready`: Active Record의 현재 SQLite 연결에 `SELECT 1`을 실행하고 성공 시 ready, 연결 실패 시 503을 반환합니다.
 
@@ -59,8 +66,13 @@ bin/rubocop
 개발·시험·production은 기본적으로 `storage/development.sqlite3`, `storage/test.sqlite3`,
 `storage/production.sqlite3`를 각각 사용합니다. 개발·production은 `DB_PRIMARY_PATH`로 격리 파일을 지정할 수 있지만,
 test는 안전을 위해 `DB_PRIMARY_PATH`와 Rails의 `DATABASE_URL`을 모두 무시하고 항상 `storage/test.sqlite3`를 사용합니다.
-현재 인사 응답의 `Greeting`은 일반 Ruby 값 객체이므로 Active Record entity를 HTTP에 노출하지 않습니다.
+현재 인사 응답의 `Greeting`과 예약 응답의 `ReservationResult`는 일반 Ruby 값 객체이므로 Active Record entity를 HTTP에 노출하지 않습니다.
+앱 시작은 migration을 자동 실행하지 않습니다. 새 DB나 schema 변경 뒤에는 위처럼 `bin/rails db:migrate`를 먼저 실행합니다.
+
+예약 API는 저장 흐름을 배우기 위한 중간 단계입니다. `product_id`는 products table을 참조하지 않는 text 값이고 재고 차감,
+동시 예약 보호, 인증, 멱등 결과 재생을 제공하지 않습니다. `Idempotency-Key`가 오면 구현된 것처럼 무시하지 않고
+`IDEMPOTENCY_NOT_SUPPORTED` 422로 거절합니다.
 
 Dockerfile은 Ruby 4.0.6, 내부 포트 3000, 비 root 실행, production SQLite 경로를 정의합니다.
 향후 로컬 게시 포트는 `127.0.0.1:18089`이지만 이번 작업에서는 이미지를 빌드하거나 컨테이너를 배포하지 않았습니다.
-예약·migration·metrics·중앙화된 전체 Problem 처리·Compose 통합은 후속 Task입니다.
+재고·동시성·멱등성, metrics·중앙화된 전체 Problem 처리·Compose 통합은 후속 Task입니다.

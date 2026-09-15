@@ -1,6 +1,6 @@
 # Rails 구현 설계
 
-Status: Task 1~2 최소 앱 구현·네이티브 검증 완료 · 2026-09-15
+Status: Task 1~3 최소 저장 API·네이티브 검증 완료 · 2026-09-15
 
 ## 버전 선택
 
@@ -15,21 +15,40 @@ Ruby는 ruby-build v20260716으로 홈의 이 저장소 전용 cache에 설치�
 global gem account와 shell 기본 설정은 변경하지 않았습니다. 앱 자체는 `.ruby-version`, Gemfile의 `ruby`, Docker build argument에
 같은 Ruby 버전을 기록하고 Rails는 Gemfile과 lockfile에서 고정합니다.
 
-## 가장 작은 책임 흐름
+## Active Record 저장 흐름
 
 ```mermaid
-flowchart LR
-    ROUTE["Rails routes"] --> CTRL["Controller<br/>입력·HTTP 표현"]
-    CTRL --> SVC["GreetingService<br/>정규화·결과 생성"]
-    SVC --> VALUE["Greeting<br/>일반 Ruby 값"]
-    CLOCK["config.x.clock<br/>UTC callable"] -. "명시적 주입" .-> CTRL
-    READY["config.x.readiness_check"] --> AR["Active Record pool"]
-    AR --> DB[("환경별 SQLite 파일")]
+sequenceDiagram
+    participant C as ReservationsController
+    participant S as ReservationService
+    participant M as Reservation model
+    participant AR as Active Record adapter/pool
+    participant DB as SQLite
+    C->>S: create(product_id, clock)
+    S->>AR: Reservation.transaction
+    AR->>DB: BEGIN
+    S->>M: create!(fields + UTC time)
+    M->>AR: validated INSERT
+    AR->>DB: INSERT
+    AR->>DB: COMMIT
+    S->>M: to_result
+    M-->>S: ReservationResult
+    S-->>C: plain Ruby value
+    C-->>C: data JSON + 201
 ```
 
-인사는 여러 저장 작업을 조합하지 않으므로 DI container, Repository, Base service를 만들지 않습니다.
-clock과 readiness는 `Rails.application.config.x`의 callable로 조립해 controller가 명시적으로 전달하거나 호출하고,
-요청 시험은 같은 경계를 고정 대역으로 교체합니다. 인사 내부 결과는 `Greeting` 값 객체이며 controller가 공개 JSON으로 변환합니다.
+`Reservation < ApplicationRecord`는 Rails 관례로 `reservations` table에 매핑됩니다. model이 field 제약과
+`ReservationResult` 매핑을 소유하고 controller는 model을 직접 JSON으로 만들지 않습니다. `ReservationService`가 명시적인
+transaction block을 소유하며 Repository wrapper나 요청 전체 자동 transaction은 추가하지 않았습니다.
+
+Zeitwerk는 파일 경로와 상수명을 맞춰 `app/models/reservation_result.rb`의 `ReservationResult`,
+`app/services/reservation_service.rb`의 `ReservationService`를 필요할 때 autoload합니다. 요청은 Service를 호출하고,
+Active Record adapter/pool이 현재 요청 thread의 SQLite connection 획득·반납과 SQL 변환을 관리합니다.
+
+transaction block이 정상 반환되어야 Active Record가 commit합니다. block 안에서 만든 결과를 HTTP에 먼저 내보낼 수는 없지만,
+코드상 성공 시점을 흐리므로 저장된 model만 block 밖으로 가져오고 `to_result`는 commit 뒤 호출합니다. insert 뒤 예외가 나면
+block이 빠져나오기 전에 rollback되어 결과와 성공 응답이 생성되지 않습니다. clock은 기존 `config.x.clock` callable을
+controller가 Service에 명시적으로 전달하고 Service가 한 번 호출해 UTC `created_at`과 `updated_at`에 사용합니다.
 
 ## 설정과 수명
 
@@ -41,10 +60,10 @@ Active Record와 Rails request executor가 connection pool의 획득·반납과 
 readiness는 현재 연결에서 실제 `SELECT 1`을 실행하지만 schema revision이나 장기적인 DB 건강을 보장하지 않습니다.
 liveness는 DB를 조회하지 않습니다. test 연결은 명시적인 `sqlite3:` URL로 `storage/test.sqlite3`에 고정해
 `DB_PRIMARY_PATH`와 Rails의 자동 `DATABASE_URL` merge가 개발·공유 DB를 가리키지 못하게 합니다.
-앱 boot가 migration을 숨겨 실행하지 않으며 native 실행 전 필요한 migration은 후속 Task에서 명시합니다.
+앱 boot가 migration을 숨겨 실행하지 않으며 native 실행 전에 `bin/rails db:migrate`를 명시적으로 실행합니다.
 
 ## 현재와 후속 범위
 
-현재는 greeting data envelope, 최소 입력 Problem 응답, live/ready, 설정 검증, 요청 시험만 제공합니다.
-예약 모델·migration·transaction·멱등성·경합, metrics, 공통 404/405/500을 포함한 전체 Problem 처리,
-관측과 Compose 연결은 구현됐다고 주장하지 않으며 후속 Task가 소유합니다.
+현재 예약은 `product_id` text를 저장하고 생성/조회하는 학습용 중간 API입니다. products table, 재고 차감,
+동시 예약 보호, 멱등 저장·재생, 인증은 없습니다. `Idempotency-Key`는 무시하지 않고 미지원 422로 거절합니다.
+metrics, 공통 404/405/500을 포함한 전체 Problem 처리, 관측과 Compose 연결도 후속 Task가 소유합니다.

@@ -4,6 +4,7 @@ require "rails/test_help"
 
 module ActiveSupport
   class TestCase
-    # This minimal app has no schema yet; request tests share one isolated test DB.
+    # Tests share the isolated test DB. Rails transactions isolate tests by default;
+    # commit behavior is covered separately with transactional tests disabled.
   end
 end
