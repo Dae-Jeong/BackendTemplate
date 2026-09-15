@@ -1,10 +1,14 @@
 # Prisma·Rails 준비와 구현 단계
 
-Status: 준비안 · 2026-09-15 · 구현 미착수
+Status: Rails Task 1–2 완료 · Prisma 적용 방식 선택 대기 · 2026-09-15
 
 목표는 NestJS에서 Prisma를 사용하고 Rails의 관용적인 API 개발을 경험하면서 기존 응답·트랜잭션·동시성·멱등성 계약을 비교하는 것입니다.
 NestJS의 기존 Drizzle 교체와 별도 비교 앱 추가 중 어느 방식인지는 사용자 선택 대기입니다.
-Rails는 `ruby/rails/`의 API 전용 앱·Active Record·SQLite를 제안합니다.
+Rails는 `ruby/rails/`의 API 전용 앱·Active Record·SQLite로 시작합니다.
+사용자 지정 `gpt-5.6-sol` Orca 에이전트가 구현하고 중앙 에이전트가 범위·검증·통합을 관리합니다.
+첫 구현 범위는 버전·공식 scaffold·인사·health·요청 시험이며 예약·관측·Compose는 후속 단계입니다.
+Rails 최소 앱과 중앙 리뷰 보완을 완료했습니다. 실제 버전·13개 테스트·네이티브 실행 증거는
+[Rails 검증 기록](rails-verification.md)에 있습니다. 다음은 Rails의 예약 schema·migration·transaction 단계입니다.
 
 ## Task 1. 실행 방식과 저장 경계 확정
 

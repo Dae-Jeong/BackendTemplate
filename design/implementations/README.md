@@ -8,6 +8,10 @@
 
 추가 준비 중인 [Prisma·Rails 작업 단계](prisma-rails-tasks.md)는 구현 완료 범위와 구분합니다.
 
+Rails의 최소 API 작업은 [사용 안내](../../ruby/rails/README.md) · [설계](rails.md) ·
+[구조](rails-structure.md) · [Task](rails-tasks.md) · [검증](rails-verification.md)에서 확인합니다.
+아래 세 구현과 달리 예약·동시성·멱등성·관측·Compose는 아직 후속 범위입니다.
+
 | 구현 | 실행 | 설계·구조 | 작업·검증 |
 | --- | --- | --- | --- |
 | Python / FastAPI | [로컬 실행](quickstart.md) · [환경·명령](../../python/fastapi/README.md) | [설계](fastapi.md) · [구조](fastapi-structure.md) | [Task](fastapi-tasks.md) · [검증](fastapi-verification.md) |
@@ -46,6 +50,7 @@ Rust는 후보이며 빈 프로젝트를 만들지 않았습니다.
 | FastAPI | 18080 | 18081 | 8000 |
 | NestJS | 18083 | 18084 | 3000 |
 | Spring Boot | 18085 | 18086 | 8080 |
+| Rails 최소 API | 18088 | 18089 (예약·미통합) | 3000 (예정) |
 | MkDocs | 18090 | — | — |
 | Prometheus | — | 19090 | 9090 |
 | Grafana | — | 13000 | 3000 |

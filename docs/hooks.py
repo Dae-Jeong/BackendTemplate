@@ -9,7 +9,7 @@ from mkdocs.structure.files import File, Files
 def on_files(files: Files, *, config: MkDocsConfig) -> Files:
     root = Path(config.config_file_path).parent
     sources = [root / "README.md", root / "RUNBOOK.md"]
-    for language in ("python", "ts", "java"):
+    for language in ("python", "ts", "java", "ruby"):
         sources.extend(sorted((root / language).glob("*/README.md")))
     sources.extend(sorted((root / "design").rglob("*.md")))
     # Keep Material's assets, but exclude every file from the tooling directory.
