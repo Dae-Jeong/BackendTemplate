@@ -163,7 +163,7 @@ downgrade/re-upgrade와 `alembic check`를 검증하며 `Base.metadata.create_al
 
 - Python 3.14.7, FastAPI 0.141.1, FastCRUD 0.22.3, SQLAlchemy 2.0.53,
   Uvicorn 0.53.0을 lockfile 환경에서 확인했습니다.
-- Ruff check·format check와 ty가 통과했고 전체 pytest는 97개가 통과했습니다.
+- Ruff check·format check와 ty가 통과했고 전체 pytest는 96개가 통과했습니다.
   Starlette 1.6.0의 `anyio.abc.BlockingPortal` 별칭 경고 1건은 기준선과 같은
   좁은 filter로 표시합니다.
 - uv build가 wheel과 sdist를 만들었고 패키지에 `.env`, data, 가상환경,

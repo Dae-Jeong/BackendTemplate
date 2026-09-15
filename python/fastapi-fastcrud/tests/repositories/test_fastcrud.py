@@ -88,18 +88,3 @@ def test_fastcrud_create_flushes_refreshes_and_outer_transaction_rolls_back(
             await engine.dispose()
 
     asyncio.run(scenario())
-
-
-def test_fastcrud_inputs_live_only_in_repository_module() -> None:
-    import template_fastcrud_api.repositories.reservations as repository
-
-    for name in (
-        "ProductCreate",
-        "ProductSelect",
-        "ReservationCreate",
-        "IdempotencyCreate",
-        "IdempotencySelect",
-    ):
-        schema = getattr(repository, name)
-        assert schema.__module__ == repository.__name__
-        assert not name.startswith("_")

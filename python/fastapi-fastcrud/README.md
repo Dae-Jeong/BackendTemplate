@@ -37,8 +37,8 @@ endpoint는 등록하지 않습니다. 실제 `.env`, `data/`, `.venv/`, `dist/`
 ## 저장 경계
 
 - `models/`: `DeclarativeBase`와 DB 제약
-- `repositories/`: FastCRUD 전용 Pydantic 입력, `commit=False` create/get,
-  조건부 재고 SQL, 내부 contract 변환
+- `repositories/`: FastCRUD 전용 Pydantic 입력, `create(..., commit=False)`와
+  `get()`, 조건부 재고 SQL, 내부 contract 변환
 - `services/`: `session.begin()`과 SQLite `BEGIN IMMEDIATE` 획득, 예약·멱등성
   원자성
 - `schemas/`: HTTP 입력·응답; Repository 입력과 공유하지 않음
