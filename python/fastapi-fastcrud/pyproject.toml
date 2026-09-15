@@ -1,0 +1,54 @@
+[project]
+name = "template-fastcrud-api"
+version = "0.1.0"
+description = "FastAPI and FastCRUD backend starting point"
+readme = "README.md"
+authors = [
+    { name = "김대정", email = "155162939+Dae-Jeong@users.noreply.github.com" }
+]
+requires-python = ">=3.14.7,<3.15"
+dependencies = [
+    "aiosqlite>=0.22.1",
+    "alembic>=1.19.2",
+    "fastapi>=0.141.1",
+    "fastcrud>=0.22.3,<0.23",
+    "prometheus-client>=0.26.0",
+    "pydantic-settings>=2.15.0",
+    "sqlalchemy[asyncio]>=2.0.52,<2.1",
+    "uvicorn>=0.52.4",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.10,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+target-version = "py314"
+line-length = 88
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib --strict-config --strict-markers"
+filterwarnings = [
+    "error",
+    # Starlette 1.6.0의 별칭 참조: 수정 릴리스 도입 후 제거합니다. 경고는 표시합니다.
+    'default:^The anyio\.abc\.BlockingPortal alias is deprecated, use anyio\.from_thread\.BlockingPortal instead\.$:DeprecationWarning:starlette\.testclient',
+]
+
+[tool.ty.environment]
+python-version = "3.14"
+
+[tool.ty.src]
+include = ["src", "tests"]
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.12.0",
+    "pytest>=9.1.1",
+    "ruff>=0.16.6",
+    "ty>=0.0.78",
+]
