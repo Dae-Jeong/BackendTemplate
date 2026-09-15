@@ -1,6 +1,6 @@
 # NestJS 작업 계획
 
-Status: Task 1–9 구현·검증 완료 · HTTP 분류·공개 입력 경계·예약 흐름 정리 · 2026-09-08
+Status: Task 1–10 구현·검증 완료 · Nest transaction runner 책임 분리 · 2026-09-15
 
 목표는 작은 실행 앱에서 시작해 예약의 동시성·멱등성까지 한 사이클을 검증하는 것입니다.
 승인된 구현에 따라 Nest 앱과 로컬 파일 SQLite 예제를 만들었습니다. 공유 운영 인프라·계정·수집기는 변경하지 않았습니다.
@@ -17,6 +17,7 @@ Status: Task 1–9 구현·검증 완료 · HTTP 분류·공개 입력 경계·�
 | Task 7 | 독립 프로세스 경합·동일/충돌 키·commit 전후 SIGKILL·응답 유실·재시작 재생 검증 |
 | Task 8 | 새 디렉터리 locked 설치·빌드·migration·예약, 컨테이너 재시작 재생·공유 대시보드·MkDocs 통합 |
 | Task 9 | 오류 분류·전송 분리, Controller의 명시적 공개 필드, 예약 업무 본문 추출; 기존 runtime 계약과 전체 시험 유지 |
+| Task 10 | injectable transaction runner가 lease·immediate transaction·outcome metric·busy 번역을 소유; Service 업무 흐름과 Primary pool cleanup 유지 |
 
 코드 checkpoint: `56cf0c7` 공식 생성물, `521e098` 설정·DI·수명,
 `5c3eb31` HTTP·관측·SQLite 예약·프로세스 복구 검증,
@@ -130,3 +131,16 @@ Node용 수집 라이브러리를 선택하고 요청 실행·전송 완료를 �
 공개 입력 필드는 Controller가 `inputPipe`에 전달하며 parser 실패 판정은 공통 함수로 통일했습니다.
 Service는 transaction·연결 반환·계측을 유지하고 재생→차감→예약→멱등 저장 본문만 추출했습니다.
 공개 필드 경계 회귀 8개와 기존 전체 시험을 통과했습니다. 명령·결과·한계는 [검증 기록](nestjs-verification.md#task-9-검증--2026-09-08)이 소유합니다.
+
+## Task 10. Transaction runner 책임 분리
+
+`TransactionRunner.run<T>(callback)` provider를 추가해 Primary 획득·반환, Drizzle immediate transaction,
+transaction outcome metric과 SQLite busy 번역을 한 기술 경계로 옮겼습니다.
+`ReservationsService`는 `reserveInTransaction`의 replay 조회→조건부 차감→예약→멱등 저장 업무 순서를 유지하고,
+Repository 메서드는 실제 판단을 드러내는 `findMatchingReplay`로 이름을 바꿨습니다.
+
+`Primary`의 pool acquisition·timeout 번역·dirty connection 폐기 책임은 바꾸지 않았습니다.
+runner options·retry·replica·transaction interceptor·범용 UnitOfWork는 추가하지 않았고,
+seed maintenance transaction은 business outcome metric과 구분해 기존 명시적 경계를 유지했습니다.
+callback rollback, acquire/begin/commit-or-rollback/release 구분, commit 뒤 cleanup 실패, metrics 실패 격리를
+[검증 기록](nestjs-verification.md#task-10-검증--2026-09-15)으로 확인합니다.

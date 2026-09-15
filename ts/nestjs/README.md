@@ -1,8 +1,11 @@
 # Backend Template — NestJS
 
 NestJS·Express·SQLite 예약 예제입니다. 생성자 DI, 명시적 HTTP DTO, Problem Details,
-앱별 JSON 로그·Prometheus registry, 단일 Primary와 commit 뒤 성공 응답을 제공합니다.
+앱별 JSON 로그·Prometheus registry, 단일 Primary와 주입 가능한 transaction runner,
+commit 뒤 성공 응답을 제공합니다.
 
+2026-09-15: `TransactionRunner.run<T>()` 책임 분리와 focused 회귀를 포함해 typecheck·lint·build,
+unit/실제 DB/프로세스 시험 49개와 HTTP e2e 15개를 통과했습니다.
 2026-09-08: build·typecheck·lint, unit/실제 DB/프로세스 시험 40개와 HTTP 시험 15개를
 통과했습니다. 네이티브 18083의 실제 DB 예약·재생과 새 디렉터리의 locked 설치·빌드·migration·예약도 확인했습니다.
 컨테이너 예약·재시작 재생과 공유 Prometheus·Grafana 수집도 확인했습니다.

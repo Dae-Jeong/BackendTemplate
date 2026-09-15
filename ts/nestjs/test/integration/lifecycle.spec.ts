@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module.js';
 import { Primary } from '../../src/database/primary.js';
+import { TransactionRunner } from '../../src/database/transaction-runner.js';
 import { configureApp, createApp } from '../../src/bootstrap/app.js';
 import { Readiness } from '../../src/bootstrap/readiness.js';
 import { readSettings } from '../../src/config/settings.js';
@@ -75,6 +76,7 @@ describe('DB initialization and observation failure', () => {
         .expect(200);
       expect(schema.body.paths).not.toHaveProperty('/v1/reservations');
       expect(() => app.get(Primary)).toThrow();
+      expect(() => app.get(TransactionRunner)).toThrow();
       expect(() => app.get(DatabaseMetrics)).toThrow();
       expect(
         (await request(app.getHttpServer()).get('/metrics')).text,

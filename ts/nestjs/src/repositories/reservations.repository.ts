@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { and, eq, gt, sql } from 'drizzle-orm';
-import type { SqliteRemoteDatabase } from 'drizzle-orm/sqlite-proxy';
+import type { TransactionClient } from '../database/transaction-runner.js';
 import {
   products,
   reservations,
@@ -13,15 +13,10 @@ import {
   IdempotencyConflict,
 } from '../exceptions/reservations.error.js';
 
-export type ReservationClient = Pick<
-  SqliteRemoteDatabase,
-  'select' | 'insert' | 'update'
->;
-
 @Injectable()
 export class ReservationsRepository {
-  async replay(
-    client: ReservationClient,
+  async findMatchingReplay(
+    client: TransactionClient,
     key: string,
     productId: string,
   ): Promise<Reservation | undefined> {
@@ -38,7 +33,7 @@ export class ReservationsRepository {
     };
   }
   async decreaseStock(
-    client: ReservationClient,
+    client: TransactionClient,
     productId: string,
   ): Promise<void> {
     const changed = await client
@@ -55,37 +50,33 @@ export class ReservationsRepository {
     throw new SoldOut();
   }
   async saveReservation(
-    client: ReservationClient,
+    client: TransactionClient,
     reservation: Reservation,
   ): Promise<void> {
-    await client
-      .insert(reservations)
-      .values({
-        id: reservation.reservationId,
-        productId: reservation.productId,
-        createdAt: reservation.createdAt.toISOString(),
-      });
+    await client.insert(reservations).values({
+      id: reservation.reservationId,
+      productId: reservation.productId,
+      createdAt: reservation.createdAt.toISOString(),
+    });
   }
   async saveIdempotency(
-    client: ReservationClient,
+    client: TransactionClient,
     key: string,
     reservation: Reservation,
   ): Promise<void> {
-    await client
-      .insert(idempotencyKeys)
-      .values({
-        key,
-        productId: reservation.productId,
-        reservationId: reservation.reservationId,
-        response: {
-          reservation_id: reservation.reservationId,
-          product_id: reservation.productId,
-          created_at: reservation.createdAt.toISOString(),
-        },
-      });
+    await client.insert(idempotencyKeys).values({
+      key,
+      productId: reservation.productId,
+      reservationId: reservation.reservationId,
+      response: {
+        reservation_id: reservation.reservationId,
+        product_id: reservation.productId,
+        created_at: reservation.createdAt.toISOString(),
+      },
+    });
   }
   async seed(
-    client: ReservationClient,
+    client: TransactionClient,
     productId: string,
     available: number,
   ): Promise<void> {

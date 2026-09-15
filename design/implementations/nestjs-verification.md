@@ -1,6 +1,6 @@
 # NestJS 검증 계획
 
-Status: 네이티브·SQLite·복구 자동 시험 및 로컬 컨테이너 통합 검증 기록 · 2026-09-08
+Status: 네이티브·SQLite·복구 자동 시험 및 transaction runner 검증 기록 · 2026-09-15
 
 이 문서는 [구현 설계](nestjs.md)의 통과 조건과 이후 실행 증거를 소유합니다.
 FastAPI의 시험 통과를 NestJS의 검증 결과로 대신하지 않습니다.
@@ -35,6 +35,7 @@ Service의 작은 정책은 일반 객체·함수 시험으로 확인합니다. 
 | N-OBS-04 | 실제 수집과 서버 중지 | `/metrics`·Prometheus·Grafana 값이 대조되고 수집 단절이 정상 0으로 보이지 않습니다. |
 | N-DB-01 | 연결 점유·pool 고갈·반환 | 실제 연결 수·획득 시간·timeout·회복이 선택한 DB 도구의 상태와 맞습니다. |
 | N-DB-02 | 저장·commit·rollback 실패 | 업무 결과와 transaction 지표가 맞고 연결을 반환합니다. DB 잠금 실패와 pool timeout을 구분합니다. |
+| N-DB-03 | transaction runner callback·acquire·begin·release·metrics 실패 | 원래 오류와 commit/rollback/cleanup 결과를 구분하고 획득한 lease를 항상 반환하며 관측 실패가 결과를 덮지 않습니다. |
 
 Node socket 종료가 진행 중 Promise나 DB 질의를 자동으로 취소한다고 가정하지 않습니다.
 연결 중단 시험은 이미 확정된 변경과 계속 실행 중인 작업도 함께 확인합니다.
@@ -168,6 +169,39 @@ Drizzle 설치 소스의 callback→COMMIT→실패 시 ROLLBACK→원래 오류
 `bodyError` identity 판정과 Service의 동일 transaction client·release·계측 순서를 유지했습니다.
 시험은 기존 fixture의 임시 SQLite DB와 OS 임시 포트를 사용했습니다.
 이번 작업은 실행 중인 서비스·컨테이너·공유 수집기를 변경하거나 재검증하지 않았습니다.
+
+## Task 10 검증 — 2026-09-15
+
+Nest CLI 12의 `nest generate provider --help`로 `--flat`·`--no-spec` 지원을 확인한 뒤
+`database/transaction-runner` provider를 공식 generator로 만들고 DB-enabled DI에만 등록했습니다.
+`TransactionClient`는 database runner가 소유하며 Repository가 runner의 callback client를 받습니다.
+Service는 `reserveInTransaction`의 업무 흐름을 유지하고 `TransactionRunner.run<T>()`만 호출합니다.
+
+macOS arm64, 고정 Node 24.20.0·pnpm 12.3.4 wrapper에서 수행한 결과입니다.
+
+| 명령 | 결과 |
+| --- | --- |
+| `node scripts/toolchain.mjs exec vitest run test/unit/transaction-runner.spec.ts` | 1 file, 9 tests 통과 |
+| `node scripts/toolchain.mjs typecheck` | 통과 |
+| `node scripts/toolchain.mjs lint` | 통과 |
+| `node scripts/toolchain.mjs build` | 통과 |
+| `node scripts/toolchain.mjs test` | 7 files, 49 tests 통과 |
+| `node scripts/toolchain.mjs test:e2e` | 2 files, 15 tests 통과 |
+| `uv tool run --from uv==0.12.10 uv run --project docs --locked mkdocs build --strict` | 통과 |
+
+focused test는 callback 오류+rollback 성공의 원래 오류 identity와 `rolled_back`, acquire 실패 시 release 없음,
+callback을 호출하기 전 begin 실패 시 release, boundary와 release가 함께 실패할 때 기존 release 오류 우선순위,
+commit 성공 뒤 release 실패의 `committed`, SQLite busy 번역, metrics 실패 격리를 확인합니다.
+실제 `DatabaseMetrics`의 기록 실패가 성공 결과뿐 아니라 원래 callback 업무 오류도 덮지 않는지 확인합니다.
+기존 실제 SQLite 시험은 deferred foreign-key COMMIT 실패, rollback 자체 실패 뒤 dirty worker 폐기,
+lock timeout, worker 교체와 재시도를 그대로 통과했습니다.
+DB-disabled 앱에는 `TransactionRunner`도 등록되지 않는 것을 lifecycle 시험으로 확인했습니다.
+
+첫 전체 시험은 seed helper도 runner로 옮겨 business `committed` metric이 선행 증가하면서
+실제 COMMIT 실패 검증 1개가 실패했습니다(6 files 통과, 1 file의 1/47 실패).
+seed는 운영 요청의 business transaction outcome이 아닌 maintenance transaction이므로 기존 명시적 경계를 복원했고,
+runner 적용 범위를 `ReservationsService` 업무 실행으로 좁혀 metric 의미와 기존 baseline을 보존했습니다.
+실행 중인 서비스·컨테이너·공유 수집기, 다른 언어 구현, Prisma와 migration은 변경하거나 재검증하지 않았습니다.
 
 ## 미검증 범위
 

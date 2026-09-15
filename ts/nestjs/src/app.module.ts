@@ -18,6 +18,7 @@ import { Primary } from './database/primary.js';
 import { DatabaseMetrics } from './observability/database.metrics.js';
 import { ReservationsRepository } from './repositories/reservations.repository.js';
 import { Shutdown } from './bootstrap/shutdown.js';
+import { TransactionRunner } from './database/transaction-runner.js';
 
 @Module({
   imports: [],
@@ -43,6 +44,7 @@ export class AppModule {
         ...(settings.databaseFilename
           ? [
               ReservationsService,
+              TransactionRunner,
               Primary,
               DatabaseMetrics,
               ReservationsRepository,

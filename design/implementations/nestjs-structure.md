@@ -1,6 +1,6 @@
 # NestJS 폴더 구조와 활용 기준
 
-Status: 실제 구현 배치 · SQLite 예약까지 구현·검증 · 2026-09-08
+Status: 실제 구현 배치 · SQLite 예약과 transaction runner 구현·검증 · 2026-09-15
 
 이 문서는 폴더·파일 역할과 의존 방향을 소유합니다.
 Nest 조립·수명·프로토콜 선택은 [구현 설계](nestjs.md), 진행 단계는 [작업 계획](nestjs-tasks.md)에 있습니다.
@@ -33,6 +33,7 @@ flowchart LR
 | `dto/*.request.dto.ts`, `*.response.dto.ts` | 외부 필드·검증·OpenAPI metadata | DB entity의 그대로 노출 |
 | `contracts/*.contract.ts` | 내부 결과·필요한 호출 계약·해당 DI 토큰 | 구현 클래스의 재수출 |
 | `providers/*.provider.ts` | 함수·외부 구현의 Provider binding | 모든 Service를 포장하는 별도 Provider 클래스 |
+| `database/transaction-runner.ts` | 업무 callback의 Primary lease·immediate transaction·결과 계측·기술 busy 번역 | 업무 순서·retry/options·HTTP transaction |
 | `http/` | Problem 변환·HTTP 관측·공개 응답 표현 | 업무 정책 |
 | `exceptions/*.error.ts` | 기능 소유 오류 타입과 필요한 업무 정보 | HTTP status·로그 출력 |
 
@@ -90,13 +91,16 @@ Nest는 순환 의존용 `forwardRef()`를 제공하지만 이 템플릿은 호�
 | --- | --- | --- |
 | 관측 | `observability/logging.ts`, `observability/metrics.ts`, `http/observation.ts` | 라이브러리 설정과 HTTP 종료 감지를 나눕니다. |
 | DB 기반 | `database/`의 연결·수명 파일, 도구가 생성한 migration 경로 | pool과 schema 변경은 업무 파일 밖에서 관리합니다. |
+| 업무 transaction 실행 | `database/transaction-runner.ts` | 업무에서 분리한 lease·transaction·계측·기술 오류 실행 경계를 한 injectable provider로 둡니다. |
 | 예약 | `repositories/reservations.repository.ts`, `models/`의 저장 모델 | transaction client를 받아 저장하고 내부 결과로 반환합니다. |
 | 예약 계약 | Controller·Service·DTO·contract·error의 `reservations` 파일 | 기존 역할 폴더에서 같은 기능명으로 연결합니다. |
 | feature Module | `modules/*.module.ts` | 공개 Provider와 수명 경계가 생긴 기능만 분리합니다. |
 
 실제 저장 schema는 `models/reservations.schema.ts`, CLI 생성 migration은 `drizzle/`에 있습니다.
-`database/primary.ts`는 tarn pool과 Nest 수명 hook을, `connection.ts`는 작은 worker 메시지 연결을,
-`sqlite.worker.ts`는 better-sqlite3 실행을 소유합니다. Repository는 Drizzle transaction client를 인자로 받습니다.
+`database/primary.ts`는 tarn pool과 Nest 수명 hook·dirty lease cleanup을, `connection.ts`는 작은 worker 메시지 연결을,
+`sqlite.worker.ts`는 better-sqlite3 실행을 소유합니다. `database/transaction-runner.ts`는
+Primary lease와 immediate transaction의 실행·outcome metric·busy 번역을 소유하고 database 소유 `TransactionClient`를 callback에 전달합니다.
+Repository는 이 client를 인자로 받고 Service는 업무 callback만 구성합니다. runner에는 options·retry·replica 선택을 추가하지 않았습니다.
 `contracts/observation.contract.ts`는 HTTP·로그·metrics가 함께 쓰는 숫자 status와 한정 결과 타입을 소유합니다.
 빈 BaseRepository·범용 RPC framework는 만들지 않았습니다.
 Dockerfile·환경 예시는 `ts/nestjs/`가, 공통 Compose·모니터링 설정은 저장소 루트가 소유합니다.

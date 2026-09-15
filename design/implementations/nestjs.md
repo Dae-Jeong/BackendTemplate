@@ -137,30 +137,35 @@ callback이 작은 SQL/결과 메시지를 기다립니다. tarn은 worker/연�
 기본 pool 상한 2, 연결 획득·잠금 timeout 각각 1000ms입니다. 잠금 대기 중 timer·health 응답을 실제 확인했습니다.
 DB 파일은 미리 공식 migration CLI로 만들며 앱은 시작 시 schema를 확인합니다. WAL·foreign keys·FULL synchronous를 사용합니다.
 
-Service가 한 업무의 트랜잭션을 열고 저장 도구가 제공하는 transaction client를 Repository 호출에 명시적으로 전달합니다.
-같은 업무의 저장은 같은 client를 사용하며 commit 완료를 기다린 다음 결과를 반환합니다.
+Service가 한 업무의 순서와 callback을 정하고 주입받은 `TransactionRunner.run<T>()`이 기술 트랜잭션 경계를 실행합니다.
+runner가 제공하는 transaction client를 Repository 호출에 명시적으로 전달하며, 같은 업무의 저장은 같은 client를 사용하고
+commit 완료를 기다린 다음 결과를 반환합니다.
 Repository의 독립 commit, 전역 transaction client, 요청 전체를 감싸는 자동 transaction Interceptor는 기본안에 넣지 않습니다.
 
 ```mermaid
 sequenceDiagram
-    participant C as Controller
-    participant S as ReservationService
-    participant D as DB transaction API
-    participant R as Repository
-    C->>S: 예약 입력·멱등 키
-    S->>D: Primary transaction 시작
-    D-->>S: transaction client
-    S->>R: 같은 client로 차감·예약·결과 저장
-    R-->>S: 업무 결과
-    S->>D: commit 대기
-    D-->>S: commit 완료
-    S-->>C: 확정된 결과
-    C-->>C: 응답 DTO 구성
+    participant S as ReservationsService
+    participant T as TransactionRunner
+    participant P as Primary
+    participant D as Drizzle · Repository
+    S->>T: run(reserveInTransaction callback)
+    T->>P: acquire
+    P-->>T: connection
+    T->>D: immediate transaction
+    D->>S: callback(transaction client)
+    S->>D: replay · 차감 · 저장
+    D-->>T: commit 또는 rollback 결과
+    T->>P: release · dirty cleanup
+    T->>T: outcome metric · busy 번역
 ```
 
-Service는 연결 lease를 얻고 Drizzle `transaction(..., { behavior: 'immediate' })`를 호출합니다.
-Repository에는 그 callback의 client만 전달합니다. 선조회·조건부 차감·예약·멱등 응답 저장을 같은
-연결에서 수행하며 공식 Drizzle API가 COMMIT/ROLLBACK을 기다립니다. 실패한 rollback 뒤 dirty 연결은 닫고 재사용하지 않습니다.
+`ReservationsService`는 replay 조회→조건부 차감→예약→멱등 응답 저장의 `reserveInTransaction` 업무 흐름을 유지합니다.
+`TransactionRunner`는 Primary 획득·반환, Drizzle `transaction(..., { behavior: 'immediate' })`, transaction outcome metric,
+SQLite busy의 기술 오류 번역을 소유합니다. `Primary`는 실제 pool 획득·timeout 번역과 dirty 연결 폐기를 계속 소유합니다.
+callback 본문 오류는 rollback 성공 뒤 원래 오류로 전달하고, COMMIT/ROLLBACK 실패는 별도 boundary failure로 유지합니다.
+commit 성공 뒤 release가 실패하면 호출은 cleanup 오류를 받지만 transaction metric은 `committed`입니다.
+seed CLI의 maintenance transaction은 business transaction metric에 포함하지 않으므로 runner를 사용하지 않습니다.
+선조회·조건부 차감·예약·멱등 응답 저장은 같은 연결에서 수행하며 공식 Drizzle API가 COMMIT/ROLLBACK을 기다립니다.
 실제 deferred foreign key COMMIT 실패·독립 프로세스 경합·commit 전후 강제 종료·응답 유실을 검증했습니다.
 HTTP가 아닌 Job·GraphQL·WebSocket도 같은 업무 메서드를 호출할 수 있지만, 프로토콜 adapter와 취소 처리는 각각 검증해야 합니다.
 Nest hook이나 DI만으로 여러 DB·외부 호출의 원자성이 생기지는 않습니다.

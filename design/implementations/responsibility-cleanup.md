@@ -1,24 +1,26 @@
-# 책임 정리 제안 (미구현)
+# 책임 정리 상태
 
-Status: proposed · unimplemented · 2026-09-15
+Status: NestJS transaction runner 구현 · 다른 구현은 미구현 제안 · 2026-09-15
 
 이 문서는 현재 코드의 책임 검토 결과와 작게 나눈 후속 작업을 기록한다. 공통
 정책을 복제하지 않고 [개발 원칙](../engineering.md), [Backend](../backend.md),
 [관측](../observability.md), 각 구현 설계·검증 문서를 기준으로 삼는다. 아래의
-테스트 매핑은 실제 파일을 가리키며, `미실행`은 이 문서 작성 중 실행하지 않았다는
-뜻이다. 이 문서의 제안은 구현·계약 승인·성능 통과를 뜻하지 않는다.
+테스트 매핑은 실제 파일을 가리킨다. NestJS의 승인된 transaction runner 범위만 구현했으며,
+FastAPI·Spring Boot·Rails 항목은 여전히 제안이고 구현·계약 승인·성능 통과를 뜻하지 않는다.
 
 ## 판정 요약
 
-현재 구조는 대부분 업무 의미 repository와 Service 트랜잭션 경계를 이미 지킨다.
-따라서 모든 테이블을 분리하거나 공통 UnitOfWork/transaction callback runner를
-새로 만들지 않는다. replay의 key/product 일치 판단은 저장된 replay를 읽는
+현재 구조는 대부분 업무 의미 repository와 Service의 업무 트랜잭션 경계를 이미 지킨다.
+공통 UnitOfWork나 네 구현 공용 runner는 만들지 않는다. 다만 NestJS는 승인된 범위에서
+업무에서 분리한 기술 실행 경계를 injectable `TransactionRunner`로 구현했다. 이 예외는 FastAPI·Spring Boot·Rails의
+runner 금지를 변경하지 않는다. replay의 key/product 일치 판단은 저장된 replay를 읽는
 repository의 업무 의미이며, reservation aggregate 저장도 한 repository 안에
 남긴다. Spring의 제품 seed는 예약 Service에서 독립된 제품 소유자로 좁힌다.
 
 ```mermaid
 flowchart TD
-  S[Service: transaction 안에서 실행] --> R{matching replay 조회}
+  S[Service: 업무 callback] --> T[transaction 기술 경계]
+  T --> R{matching replay 조회}
   R -->|없음| W[조건부 재고 감소와 예약·replay 저장]
   R -->|있음| V[저장된 결과 선택]
   R -->|다른 입력: Conflict| E[업무·저장 예외]
@@ -33,13 +35,14 @@ flowchart TD
 ```
 
 위 그림은 멱등성을 제공하는 세 구현의 논리 흐름이다. Rails에는 replay가 아직 없다.
+NestJS의 `T`는 실제 runner이고 FastAPI·Spring Boot에서는 각 기존 경계가 같은 논리 역할을 맡는다.
 연결 획득과 begin 순서는 구현별로 유지한다. Spring의 claim 경합은 rollback 이후
 별도 replay 조회로 처리하며 예약 업무를 무조건 재실행하는 자동 retry가 아니다.
 
 완료는 flush가 아니라 commit 성공이다. FastAPI/Nest의 body 예외와 rollback 성공은 `rolled_back`,
 commit/rollback boundary failure는 `failed`다. commit 뒤 release/cleanup 실패는
 실제 DB 완료와 자원 cleanup 결과를 별도로 다루며 새 공통 계약을 만들지 않는다.
-이 문서에서 새 wrapper를 제안하지 않는 이유도 이 경계를 숨기지 않기 위해서다.
+Nest runner도 이 결과를 숨기지 않고 callback/commit/rollback/release 오류를 구분한다.
 
 ## FastAPI
 
@@ -61,20 +64,21 @@ ReplayRepository로 쪼개거나 generic transaction runner를 도입하는 것�
 ## NestJS
 
 실제 경로는 `services/reservations.service.ts:reserve/reserveInTransaction`,
-`repositories/reservations.repository.ts:replay/decreaseStock/save*/seed`,
-`database/primary.ts:acquire/release`, `database/seed.ts`이다.
+`repositories/reservations.repository.ts:findMatchingReplay/decreaseStock/save*/seed`,
+`database/transaction-runner.ts:run`, `database/primary.ts:acquire/release`, `database/seed.ts`이다.
 
 | 작은 작업 | 책임·파일/시그니처 | callsite 변화와 보존할 동작 | 검증 매핑 |
 | --- | --- | --- | --- |
-| NE-1 lease 경계 유지 판정 | 변경하지 않음. `Primary.acquire/release`가 pool acquisition·timeout·metrics·dirty cleanup을 계속 소유 | Service의 acquire→transaction→release 순서 유지. Primary가 이미 pool timeout을 번역하므로 중복 translator 없음 | [primary.ts](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/ts/nestjs/src/database/primary.ts), [reservations.spec.ts](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/ts/nestjs/test/integration/reservations.spec.ts) — **미실행** |
-| NE-2 transaction 오류/metrics 유지 판정 | 변경하지 않음. `ReservationsService.reserve`가 transaction outcome만 소유 | body error+rollback success만 rolled_back; commit/rollback failure는 failed. callback runner/UnitOfWork 신설 금지 | [reservations.spec.ts](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/ts/nestjs/test/integration/reservations.spec.ts) deferred commit, rollback failure, worker replacement — **미실행** |
-| NE-3 replay 이름 명시 | `replay(client, key, productId)`를 `findMatchingReplay(client, key, productId)`로 rename하고 Service callsite만 변경; `ReservationClient`는 현 위치 유지 | key 없음/일치/mismatch를 method name과 repository가 드러냄. aggregate 저장·conflict policy 이동 없음 | [reservations.spec.ts](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/ts/nestjs/test/integration/reservations.spec.ts) same-key replay/conflict 및 stock atomicity — **미실행** |
-| NE-4 seed/Client ownership | `database/seed.ts`가 `Primary.acquire/release`와 immediate transaction을 조립; `ReservationsRepository.seed(client, productId, available)`는 제품 insert-if-absent만 소유 | `ReservationClient`는 이 repository의 DB operation port로 남기고 별도 ProductRepository/adapter를 만들지 않음. seed 반복 시 기존 stock 불변 | [database.ts](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/ts/nestjs/test/helpers/database.ts) `seed`, [reservations.spec.ts](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/ts/nestjs/test/integration/reservations.spec.ts) migrate/seed/replay — **미실행** |
+| NE-1 lease 경계 | **구현**. `TransactionRunner.run<T>`이 acquire→immediate transaction→release를 조립하고 `Primary`가 pool acquisition·timeout·dirty cleanup을 계속 소유 | acquire 실패에는 release하지 않고, acquire 뒤 begin/commit/rollback 실패에는 release를 시도. pool timeout 번역은 Primary에 유지 | [NestJS Task 10 검증](nestjs-verification.md#task-10-검증--2026-09-15) |
+| NE-2 transaction 오류/metrics | **구현**. runner가 outcome metric과 SQLite busy 번역을 소유하고 Service는 업무 callback을 전달 | callback 오류+rollback 성공만 `rolled_back`; commit/rollback failure는 `failed`; commit 성공+release 실패는 `committed`. 원래 오류 identity와 기존 오류 우선순위 유지 | [NestJS Task 10 검증](nestjs-verification.md#task-10-검증--2026-09-15) |
+| NE-3 replay 이름 명시 | **구현**. `findMatchingReplay(client, key, productId)`와 Service callsite로 변경 | key 없음/일치/mismatch를 method name과 repository가 드러냄. aggregate 저장·conflict policy 이동 없음 | [NestJS Task 10 검증](nestjs-verification.md#task-10-검증--2026-09-15) |
+| NE-4 seed/Client ownership | **구현 범위 유지**. `database/seed.ts`는 business outcome metric 밖의 maintenance transaction을 명시적으로 조립; `TransactionClient`는 database runner가 소유 | 별도 ProductRepository/adapter 없음. seed 반복 시 기존 stock 불변이고 business transaction metric baseline을 바꾸지 않음 | [NestJS Task 10 검증](nestjs-verification.md#task-10-검증--2026-09-15) |
 
-추가 케이스(구현 시): acquire 성공 후 transaction begin 실패도 release, release 중
-dirty connection 폐기, metrics 예외가 원래 DB 오류를 덮지 않음, replay mismatch에서
-decrement 미발생. Nest의 worker lifecycle/Primary 이미 제공하는 수명 의미를 재구현하지
-않는다.
+추가한 focused test는 callback rollback 원래 오류, acquire 실패의 release 없음,
+begin 또는 transaction boundary 실패의 release 시도, commit 성공 뒤 release 실패의 `committed`,
+busy 번역과 metrics 실패 격리를 고정한다. 기존 실제 SQLite 검증은 deferred COMMIT 실패,
+rollback 실패 dirty connection 폐기, replay mismatch의 재고 불변을 유지한다.
+runner options·retry·replica·Interceptor·worker/Primary 재구현은 추가하지 않았다.
 
 ## Spring Boot
 
@@ -138,11 +142,11 @@ Rails idempotency 구현은 이 문서 범위가 아니다.
 | 규칙 출처 | 설계 verdict | 조건/적용 범위 |
 | --- | --- | --- |
 | [engineering: Repository](../engineering.md#db와-외부-연계가-추가될-때) | 조건부 — 업무 의미 조회·저장만 소유 | FastAPI/Nest replay·reservation aggregate는 기존 cohesive repository 유지 |
-| [engineering: Application](../engineering.md#application과-입력-경계) | 적합 — Service가 업무 흐름·transaction 소유 | DB SQL은 repository; HTTP DTO는 Service 안으로 들이지 않음 |
+| [engineering: Application](../engineering.md#application과-입력-경계) | 적합 — Service가 업무 흐름·원자적 범위를 정함 | Nest의 기술 실행은 runner; DB SQL은 repository; HTTP DTO는 Service 안으로 들이지 않음 |
 | [Backend transaction](../backend.md) | 조건부 — commit 성공만 완료 | flush/insert 반환을 성공으로 세지 않음; commit/rollback failure는 failed |
 | [observability](../observability.md) | 조건부 — 경계별 의미 유지 | metrics failure가 원래 오류·응답을 덮지 않으며 구현별 label 의미를 섞지 않음 |
 | [FastAPI structure](fastapi-structure.md) | 적합 — dependency/session 수명 기존 조립 유지 | acquire는 outer transaction 안에서 한 번; generic runner 금지 |
-| [NestJS structure](nestjs-structure.md) | 적합 — Primary가 pool lease/cleanup 소유 | Service가 pool timeout을 재번역하지 않음; dirty connection 폐기 필수 |
+| [NestJS structure](nestjs-structure.md) | 적합 — runner가 lease를 조립하고 Primary가 pool/cleanup 소유 | Service가 pool timeout·busy를 번역하지 않음; dirty connection 폐기 필수 |
 | [Spring structure](spring-boot-structure.md) | 조건부 — public proxy transaction 유지 | `ReservationAttempts`와 `ReservationService` self-invocation 분리 유지 |
 | [Rails structure](rails-structure.md) | 조건부 — ActiveRecord idiom 유지 | repository/base/strategy/idempotency framework 도입 안 함 |
 | [Runtime Review](../runtime-review.md) | 보류 — 미실측 성능 주장 금지 | 이 문서는 구조 제안만; 부하·용량 verdict 없음 |
@@ -162,15 +166,17 @@ FA-2의 이름과 Service 호출을 변경한다. FA-1/3은 유지 판정이며 
 - replay mismatch가 재고 변경 없이 repository에서 결정됨
 - seed 반복 실행이 기존 stock을 재설정하지 않음
 
-### Task 2. NestJS replay 명명
+### Task 2. NestJS transaction runner와 replay 명명 — 구현 완료
 
 목표:
-NE-3의 메서드 이름과 Service 호출을 변경한다. NE-1/2/4는 유지 판정이다.
+NE-1/2의 승인된 runner 분리를 구현하고 NE-3의 메서드 이름과 Service 호출을 변경한다.
+NE-4 seed maintenance transaction의 계측 범위는 유지한다.
 
 예상 결과:
 
 - `findMatchingReplay`가 일치 판단을 드러내고 경합·commit 실패 테스트가 유지됨
-- Primary와 ReservationClient의 소유 위치는 동일함
+- Service는 `reserveInTransaction` 업무 흐름, runner는 기술 경계, Primary는 실제 pool/dirty cleanup을 소유함
+- callback·boundary·release·metrics 실패의 outcome과 원래 예외가 구분됨
 
 ### Task 3. Spring paired save와 replay 명명
 
@@ -208,12 +214,13 @@ RA-1의 단일 규칙을 구현한다. RA-2/4는 유지, RA-3 helper 추출은 �
 동적 수락 조건(테스트/build)은 구현 후 별도 실행 기록으로 남기며, 아래 작업 순서에서는
 통과를 주장하지 않는다.
 
-Task 1→2→3→4→5 순서로 검증·커밋을 나눈다. rename에 기존 검증으로 충분하면
+Task 2의 NestJS 범위만 2026-09-15에 구현·검증했다. Task 1·3·4·5는 pending이며
+각 구현 작업에서 검증·커밋을 나눈다. rename에 기존 검증으로 충분하면
 구현을 복제하는 새 테스트를 추가하지 않는다. FA-4와 추가 오류 케이스는 기존 검증의
 누락이 확인될 때만 보강하며 이름 변경에 기술 경계 재구현을 끼워 넣지 않는다.
 
 모든 작업의 완료 조건은 (a) 제안한 파일·메서드와 callsite가 실제 코드와 일치,
 (b) 정상·실패·경합·재생에서 상태와 외부 호출 횟수가 기존과 동일,
 (c) 위 매핑 테스트와 새 누락 케이스의 실행 결과를 별도로 기록하는 것이다.
-이 문서 작성 시 애플리케이션 테스트와 build는 실행하지 않았다.
-문서는 MkDocs strict build와 로컬 Mermaid 렌더링을 확인했다.
+NestJS 실행 결과는 [NestJS 검증 기록](nestjs-verification.md#task-10-검증--2026-09-15)이 소유한다.
+다른 구현의 애플리케이션 테스트와 build는 이 변경에서 실행하지 않았다.
