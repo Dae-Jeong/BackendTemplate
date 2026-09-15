@@ -47,6 +47,54 @@ describe('real SQLite reservations', () => {
     );
     expect(await state(app)).toEqual([[0, 1, 1]]);
   });
+  it.each([
+    ['invalid shape', { reservation_id: 'reservation-1' }],
+    [
+      'invalid id type',
+      {
+        reservation_id: 1,
+        product_id: 'widget',
+        created_at: '2026-09-16T01:02:03.004Z',
+      },
+    ],
+    [
+      'invalid date',
+      {
+        reservation_id: 'reservation-1',
+        product_id: 'widget',
+        created_at: '2026-02-30T01:02:03.004Z',
+      },
+    ],
+  ])(
+    'returns 500 without further writes for a corrupted snapshot with %s',
+    async (_case, damagedSnapshot) => {
+      await reserve(app).expect(201);
+      const primary = app.get(Primary);
+      const connection = await primary.acquire();
+      try {
+        await connection.query(
+          'update idempotency_keys set response = ? where key = ?',
+          [JSON.stringify(damagedSnapshot), 'key-1'],
+          'run',
+        );
+      } finally {
+        await primary.release(connection);
+      }
+
+      const response = await reserve(app).expect(500);
+      expect(response.body.code).toBe('INTERNAL_ERROR');
+      expect(response.headers['idempotency-replayed']).toBeUndefined();
+      expect(await state(app)).toEqual([[0, 1, 1]]);
+
+      const metrics = await app.get(DatabaseMetrics).transactions.get();
+      expect(
+        metrics.values.find(
+          (value) =>
+            'outcome' in value.labels && value.labels.outcome === 'rolled_back',
+        )?.value,
+      ).toBe(1);
+    },
+  );
   it('validates body/header and maps missing product', async () => {
     expect((await reserve(app, 'key', 'missing').expect(404)).body.code).toBe(
       'PRODUCT_NOT_FOUND',

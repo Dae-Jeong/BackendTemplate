@@ -8,6 +8,10 @@ import {
 } from '../models/reservations.schema.js';
 import type { Reservation } from '../contracts/reservations.contract.js';
 import {
+  decodeReservationSnapshot,
+  encodeReservationSnapshot,
+} from '../models/reservation-snapshot.js';
+import {
   ProductNotFound,
   SoldOut,
   IdempotencyConflict,
@@ -26,11 +30,7 @@ export class ReservationsRepository {
       .where(eq(idempotencyKeys.key, key));
     if (!existing) return undefined;
     if (existing.productId !== productId) throw new IdempotencyConflict();
-    return {
-      reservationId: existing.response.reservation_id,
-      productId: existing.response.product_id,
-      createdAt: new Date(existing.response.created_at),
-    };
+    return decodeReservationSnapshot(existing.response);
   }
   async decreaseStock(
     client: TransactionClient,
@@ -68,11 +68,7 @@ export class ReservationsRepository {
       key,
       productId: reservation.productId,
       reservationId: reservation.reservationId,
-      response: {
-        reservation_id: reservation.reservationId,
-        product_id: reservation.productId,
-        created_at: reservation.createdAt.toISOString(),
-      },
+      response: encodeReservationSnapshot(reservation),
     });
   }
   async seed(

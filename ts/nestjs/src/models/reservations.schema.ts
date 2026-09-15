@@ -1,6 +1,5 @@
 import { sql } from 'drizzle-orm';
 import { sqliteTable, text, integer, check } from 'drizzle-orm/sqlite-core';
-import type { ReservationSnapshot } from '../contracts/reservations.contract.js';
 
 export const products = sqliteTable(
   'products',
@@ -30,9 +29,7 @@ export const idempotencyKeys = sqliteTable(
       .notNull()
       .unique()
       .references(() => reservations.id),
-    response: text('response', { mode: 'json' })
-      .$type<ReservationSnapshot>()
-      .notNull(),
+    response: text('response', { mode: 'json' }).$type<unknown>().notNull(),
   },
   (table) => [
     check(

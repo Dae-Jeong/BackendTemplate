@@ -1,6 +1,6 @@
 # NestJS 검증 계획
 
-Status: 네이티브·SQLite·복구 자동 시험 및 DB worker 가독성 검증 기록 · 2026-09-15
+Status: 네이티브·SQLite·복구 자동 시험 및 저장 snapshot runtime 경계 검증 기록 · 2026-09-16
 
 이 문서는 [구현 설계](nestjs.md)의 통과 조건과 이후 실행 증거를 소유합니다.
 FastAPI의 시험 통과를 NestJS의 검증 결과로 대신하지 않습니다.
@@ -54,6 +54,7 @@ DB 단계에서 선정한 실제 DB의 독립 연결과 독립 프로세스로 �
 | N-RES-05 | rollback 후 재시도 | 같은 키로 다시 처리할 수 있고 실패의 부분 상태가 남지 않습니다. |
 | N-RES-06 | commit 뒤 응답 유실·프로세스 재시작 | 이미 확정된 예약을 재생하며 중복 차감하지 않습니다. |
 | N-RES-07 | commit 전후 프로세스 강제 종료 | 미확정 변경의 rollback과 확정 결과의 재생을 구분합니다. |
+| N-RES-08 | 저장 snapshot의 shape·ID 타입·시각 손상 | HTTP 성공으로 재생하지 않고 500을 반환하며 재고·예약·멱등 키를 추가 변경하지 않습니다. |
 
 DB/ORM을 바꾸면 해당 DB에서 이 표를 다시 수행합니다. 동시성 시험은 처리량·p95 보장의 근거가 아니며
 부하 목표와 환경은 [Runtime Review](../runtime-review.md) 기준으로 따로 기록합니다.
@@ -223,6 +224,36 @@ runner 적용 범위를 `ReservationsService` 업무 실행으로 좁혀 metric 
 기존 실제 SQLite 시험의 COMMIT·rollback 실패, dirty worker 폐기, worker 강제 종료와 원자성,
 독립 프로세스 경합·복구를 다시 통과했습니다. 새 framework·RPC·ORM 변경이나 실행 중인
 서비스·컨테이너 변경은 없었습니다.
+
+## Task 12 검증 — 2026-09-16
+
+`idempotency_keys.response`의 Drizzle 타입을 `unknown`으로 두고
+`models/reservation-snapshot.ts`의 명시적 decoder/encoder를 통과한 값만 `Reservation`으로 만듭니다.
+decoder는 필수 snake_case 필드 세 개, 비어 있지 않은 문자열 ID와 입력 문자열이 기존 Nest encoder의
+`Date.toISOString()` milliseconds/`Z` 출력과 정확히 같은 실재 시각을 요구합니다. 따라서 숫자·null·배열,
+누락 필드, 불가능한 날짜와 자동 정규화될 날짜 문자열을 거절하고 추가 저장 metadata는 무시하며,
+기존 저장 형식은 그대로 encode합니다.
+
+`ts/nestjs/`에서 고정 Node·pnpm wrapper로 수행한 결과입니다.
+
+| 명령 | 결과 |
+| --- | --- |
+| `node scripts/toolchain.mjs exec vitest run test/unit/reservation-snapshot.spec.ts test/integration/reservations.spec.ts` | 2 files, 26 tests 통과 |
+| `node scripts/toolchain.mjs format` | Prettier 실행 완료 |
+| `node scripts/toolchain.mjs install --frozen-lockfile` | 통과, lockfile 변경 없음 |
+| `node scripts/toolchain.mjs build` | 통과 |
+| `node scripts/toolchain.mjs typecheck` | 통과 |
+| `node scripts/toolchain.mjs lint` | 통과 |
+| `node scripts/toolchain.mjs test` | 8 files, 64 tests 통과 |
+| `node scripts/toolchain.mjs test:e2e` | 2 files, 15 tests 통과 |
+
+새 unit 시험은 추가 metadata가 있는 정상 snapshot의 decode→encode 동일성과 필수 shape·필드 타입·빈 ID·
+실재하지 않거나 기존 encoder의 canonical 형식이 아닌 시각의 거절을 확인합니다. 실제 SQLite integration 시험은 정상 예약 뒤 임시 fixture row만
+각각 잘못된 shape·숫자 reservation ID·불가능한 날짜로 바꾸고 재생 요청이 500인지 확인했습니다.
+세 경우 모두 성공/replayed header가 없고 재고 0·예약 1·멱등 키 1 상태를 유지하며,
+기존 transaction runner에서 `rolled_back` 한 건으로 계측됩니다. 기존 정상 snapshot의 응답 본문 완전 동일 재생,
+동일 키 충돌, rollback, worker 직렬화와 독립 프로세스 복구 시험도 전체 suite에서 다시 통과했습니다.
+실행 중인 서비스·공유 DB·컨테이너·migration은 변경하지 않았고 시험은 OS 임시 SQLite 파일만 사용했습니다.
 
 ## 미검증 범위
 

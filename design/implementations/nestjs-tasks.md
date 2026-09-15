@@ -1,6 +1,6 @@
 # NestJS 작업 계획
 
-Status: Task 1–11 구현·검증 완료 · DB worker 연결 가독성 정리 · 2026-09-15
+Status: Task 1–12 구현·검증 완료 · 저장 snapshot runtime 경계 추가 · 2026-09-16
 
 목표는 작은 실행 앱에서 시작해 예약의 동시성·멱등성까지 한 사이클을 검증하는 것입니다.
 승인된 구현에 따라 Nest 앱과 로컬 파일 SQLite 예제를 만들었습니다. 공유 운영 인프라·계정·수집기는 변경하지 않았습니다.
@@ -19,6 +19,7 @@ Status: Task 1–11 구현·검증 완료 · DB worker 연결 가독성 정리 �
 | Task 9 | 오류 분류·전송 분리, Controller의 명시적 공개 필드, 예약 업무 본문 추출; 기존 runtime 계약과 전체 시험 유지 |
 | Task 10 | injectable transaction runner가 lease·immediate transaction·outcome metric·busy 번역을 소유; Service 업무 흐름과 Primary pool cleanup 유지 |
 | Task 11 | worker 응답 정리와 SQL 실행 분기를 이름 있는 작은 경계로 정리; protocol·pool·transaction 의미 유지 |
+| Task 12 | 저장 JSON을 `unknown`으로 읽고 필수 shape·문자열·canonical 시각 검증 후 재생; 기존 transaction·metrics·복구 의미 유지 |
 
 코드 checkpoint: `56cf0c7` 공식 생성물, `521e098` 설정·DI·수명,
 `5c3eb31` HTTP·관측·SQLite 예약·프로세스 복구 검증,
@@ -154,3 +155,16 @@ callback rollback, acquire/begin/commit-or-rollback/release 구분, commit 뒤 c
 
 worker protocol, close와 worker death 처리, transaction 상태, runner·pool·metrics 의미는 바꾸지 않았고
 기존 build·typecheck·lint와 실제 SQLite·독립 프로세스·HTTP 전체 시험으로 확인했습니다.
+
+## Task 12. 저장 snapshot runtime 검증 경계
+
+목표:
+DB에 저장된 idempotency 응답 JSON을 신뢰하지 않고 필수 shape·필드 타입·시각 형식을 검증한 뒤
+`Reservation`으로 변환하며, 저장과 재생의 기존 형식과 Service·Repository 흐름을 유지합니다.
+
+예상 결과:
+
+- JSON column은 검증 전 `unknown`이고, 필수 필드 세 개·비어 있지 않은 문자열 ID·기존 encoder와 같은 실재하는 canonical `toISOString()` 시각만 `Reservation`이 됩니다.
+- 기존 정상 snapshot은 값 변경 없이 재생되고 새 저장도 같은 snake_case JSON 형식을 사용합니다.
+- 손상된 shape·ID 타입·날짜의 실제 SQLite row는 HTTP 500이며 재고·예약·멱등 키 추가 쓰기가 없고 transaction 결과는 기존 경계에서 계측됩니다.
+- focused unit/실제 DB HTTP 시험과 전체 build·typecheck·lint·format·test·test:e2e 결과가 검증 기록에 남습니다.

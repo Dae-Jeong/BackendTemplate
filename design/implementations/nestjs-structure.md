@@ -1,6 +1,6 @@
 # NestJS 폴더 구조와 활용 기준
 
-Status: 실제 구현 배치 · SQLite 예약과 transaction runner 구현·검증 · 2026-09-15
+Status: 실제 구현 배치 · SQLite 예약과 저장 snapshot 검증 경계 구현·검증 · 2026-09-16
 
 이 문서는 폴더·파일 역할과 의존 방향을 소유합니다.
 Nest 조립·수명·프로토콜 선택은 [구현 설계](nestjs.md), 진행 단계는 [작업 계획](nestjs-tasks.md)에 있습니다.
@@ -34,6 +34,7 @@ flowchart LR
 | `contracts/*.contract.ts` | 내부 결과·필요한 호출 계약·해당 DI 토큰 | 구현 클래스의 재수출 |
 | `providers/*.provider.ts` | 함수·외부 구현의 Provider binding | 모든 Service를 포장하는 별도 Provider 클래스 |
 | `database/transaction-runner.ts` | 업무 callback의 Primary lease·immediate transaction·결과 계측·기술 busy 번역 | 업무 순서·retry/options·HTTP transaction |
+| `models/reservation-snapshot.ts` | 저장 JSON의 필수 shape·문자열·canonical UTC 시각 검증과 encode/decode | HTTP DTO·업무 정책·범용 validation framework |
 | `http/` | Problem 변환·HTTP 관측·공개 응답 표현 | 업무 정책 |
 | `exceptions/*.error.ts` | 기능 소유 오류 타입과 필요한 업무 정보 | HTTP status·로그 출력 |
 
@@ -97,6 +98,11 @@ Nest는 순환 의존용 `forwardRef()`를 제공하지만 이 템플릿은 호�
 | feature Module | `modules/*.module.ts` | 공개 Provider와 수명 경계가 생긴 기능만 분리합니다. |
 
 실제 저장 schema는 `models/reservations.schema.ts`, CLI 생성 migration은 `drizzle/`에 있습니다.
+JSON column은 DB에서 읽는 동안 `unknown`이며 `models/reservation-snapshot.ts`가 검증한 뒤에만
+`Reservation`을 만듭니다. 이 경계는 필수 세 필드와 비어 있지 않은 문자열 ID,
+기존 Nest encoder의 `Date.toISOString()`이 생성하는 milliseconds/`Z` canonical 시각만 허용하므로
+숫자·null·누락 필드·불가능한 날짜를 정상 값으로 변환하지 않습니다. 추가 저장 metadata는 무시하고,
+저장도 같은 파일의 encoder를 사용해 기존 snapshot 형식을 유지합니다.
 `database/primary.ts`는 tarn pool과 Nest 수명 hook·dirty lease cleanup을, `connection.ts`는 작은 worker 메시지 연결을,
 `sqlite.worker.ts`는 better-sqlite3 실행을 소유합니다. `database/transaction-runner.ts`는
 Primary lease와 immediate transaction의 실행·outcome metric·busy 번역을 소유하고 database 소유 `TransactionClient`를 callback에 전달합니다.
