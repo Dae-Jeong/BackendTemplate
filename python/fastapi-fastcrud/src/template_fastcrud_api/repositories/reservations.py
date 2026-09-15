@@ -21,7 +21,7 @@ from template_fastcrud_api.models.reservations import (
     ProductModel,
     ReservationModel,
 )
-from template_fastcrud_api.schemas.persistence.reservations import (
+from template_fastcrud_api.schemas.reservations import (
     IdempotencyRecord,
     ProductSelect,
     ReservationCreate,
