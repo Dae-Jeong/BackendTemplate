@@ -89,6 +89,7 @@ async def get_product(session: AsyncSession, product_id: str) -> ProductRecord:
         schema_to_select=ProductSelect,
         return_as_model=True,
         id=product_id,
+        is_deleted=False,
     )
     if selected is None:
         raise ProductNotFound()
@@ -98,7 +99,11 @@ async def get_product(session: AsyncSession, product_id: str) -> ProductRecord:
 async def decrease_stock(session: AsyncSession, product_id: str) -> None:
     changed = await session.scalar(
         update(ProductModel)
-        .where(ProductModel.id == product_id, ProductModel.available > 0)
+        .where(
+            ProductModel.id == product_id,
+            ProductModel.available > 0,
+            ProductModel.is_deleted.is_(False),
+        )
         .values(available=ProductModel.available - 1)
         .returning(ProductModel.id)
     )

@@ -3,24 +3,41 @@
 import asyncio
 
 from alembic import context
+from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from template_fastcrud_api.core.database import create_primary_engine
 from template_fastcrud_api.core.database_metrics import create_database_metrics
 from template_fastcrud_api.core.metrics import create_metrics
 from template_fastcrud_api.core.settings import Settings
-from template_fastcrud_api.models.reservations import Base
+from template_fastcrud_api.models import Base
 
 config = context.config
 target_metadata = Base.metadata
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(
-        connection=connection, target_metadata=target_metadata, transactional_ddl=True
-    )
-    with context.begin_transaction():
-        context.run_migrations()
+    sqlite_connection = connection.dialect.name == "sqlite"
+    if sqlite_connection:
+        connection.connection.dbapi_connection.execute("PRAGMA foreign_keys=OFF")
+    try:
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            transactional_ddl=True,
+        )
+        with context.begin_transaction():
+            context.run_migrations()
+        if sqlite_connection:
+            violations = connection.execute(text("PRAGMA foreign_key_check")).all()
+            if violations:
+                raise RuntimeError(
+                    f"Migration left foreign key violations: {violations}"
+                )
+            connection.commit()
+    finally:
+        if sqlite_connection:
+            connection.connection.dbapi_connection.execute("PRAGMA foreign_keys=ON")
 
 
 async def run_async_migrations() -> None:

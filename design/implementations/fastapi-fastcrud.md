@@ -51,7 +51,7 @@ uv tool run --from uv==0.12.10 uv run --locked alembic revision \
 | `commit=False`로 커밋 위임 | SQL 실행을 미루는 옵션이 아닙니다. 모든 업무 쓰기에 명시하고 최종 commit/rollback은 바깥 Service의 `session.begin()`이 소유합니다. |
 | `schema_to_select`와 `return_as_model` 반환 | create 결과가 필요하면 둘을 지정합니다. 생략하면 `create()`는 `None`을 반환합니다. |
 | `crud_router` 자동 endpoint | 인증 없는 로컬 관리 CRUD 데모에만 선택적으로 사용합니다. 예약 흐름에는 사용하지 않습니다. |
-| soft delete·bulk/upsert·관계 포함 | 제품 요구와 실패 계약을 먼저 정한 뒤 도입합니다. 템플릿 기본 기능으로 켜지 않습니다. |
+| soft delete·bulk/upsert·관계 포함 | soft delete는 변경 가능한 `ProductModel`에만 opt-in합니다. 전역 필터·자동 endpoint·복구 API는 만들지 않습니다. 나머지는 제품 요구가 생긴 뒤 도입합니다. |
 
 FastCRUD 0.22.3의 `create(..., commit=False)`는 내부에서 `flush()`와 `refresh()`를 수행하지만 commit하지 않습니다.
 `schema_to_select`가 없으면 반환은 `None`이며, 지정하면 기본은 `dict`, `return_as_model=True`이면 해당 Pydantic
@@ -66,7 +66,9 @@ FastCRUD 0.22.3의 `create(..., commit=False)`는 내부에서 `flush()`와 `ref
 | --- | --- |
 | `bootstrap/` | 앱 factory·lifespan·router·예외 handler를 조립하고 Engine을 정리합니다. |
 | `dependencies/` | 요청마다 새 `AsyncSession`과 clock 같은 HTTP dependency를 제공합니다. 자동 commit하지 않습니다. |
-| `models/` | `DeclarativeBase`와 ORM mapped class, DB 제약을 소유합니다. |
+| `models/base.py` | Alembic과 모든 mapped class가 공유하는 `DeclarativeBase` metadata만 소유합니다. |
+| `models/mixins.py` | 독립 조합 가능한 UTC timestamp·soft-delete column과 SQLite UTC 복원 타입을 소유합니다. |
+| `models/reservations.py` | product·reservation·idempotency mapped class와 DB 제약을 소유합니다. |
 | `repositories/` | FastCRUD 호출과 특수 SQL, ORM↔내부 계약 변환을 소유합니다. commit하지 않습니다. |
 | `services/` | 업무 순서·정책·transaction 경계를 소유합니다. HTTP schema와 ORM을 반환하지 않습니다. |
 | `contracts/` | HTTP·Pydantic·ORM과 분리한 불변 업무 입력·결과를 소유합니다. |
@@ -79,6 +81,21 @@ FastCRUD 0.22.3의 `create(..., commit=False)`는 내부에서 `flush()`와 `ref
 
 함수 중심으로 시작합니다. 범용 `BaseRepository`, transaction runner, 비어 있는 Facade는 만들지 않습니다.
 여러 업무를 실제로 조합할 때만 `services/<업무>.py` 함수가 조합 책임을 맡습니다.
+
+```mermaid
+flowchart LR
+    BASE["models/base.py<br/>Base metadata"] --> PRODUCT["ProductModel"]
+    BASE --> RESERVATION["ReservationModel"]
+    BASE --> IDEMPOTENCY["IdempotencyKeyModel"]
+    TIMESTAMP["TimestampMixin<br/>created_at · updated_at"] --> PRODUCT
+    SOFT_DELETE["SoftDeleteMixin<br/>is_deleted · deleted_at"] --> PRODUCT
+```
+
+| 모델 | timestamp mixin | soft-delete mixin | 이유 |
+| --- | --- | --- | --- |
+| `ProductModel` | 적용 | 적용 | 재고 변경과 논리 삭제를 audit합니다. |
+| `ReservationModel` | 미적용 | 미적용 | 기존 불변 `created_at` 문자열과 공개 응답 직렬화를 그대로 유지합니다. |
+| `IdempotencyKeyModel` | 미적용 | 미적용 | 저장된 성공 snapshot의 정확한 재생 계약을 그대로 유지합니다. |
 
 ## 런타임과 transaction 소유권
 
@@ -117,16 +134,23 @@ writer 선점을 대신하지 않으며, 같은 키 경합을 키 조회 전부�
 ```python
 changed = await session.scalar(
     update(ProductModel)
-    .where(ProductModel.id == product_id, ProductModel.available > 0)
+    .where(
+        ProductModel.id == product_id,
+        ProductModel.available > 0,
+        ProductModel.is_deleted.is_(False),
+    )
     .values(available=ProductModel.available - 1)
     .returning(ProductModel.id)
 )
 ```
 
-`changed is None`이면 같은 transaction에서 상품 존재 여부를 확인해 `PRODUCT_NOT_FOUND`와 `SOLD_OUT`을 구분합니다.
+`changed is None`이면 같은 transaction에서 활성 상품 존재 여부를 확인해 `PRODUCT_NOT_FOUND`와 `SOLD_OUT`을 구분합니다.
 선조회 후 무조건 차감하는 방식으로 바꾸지 않습니다. 재고 차감·예약·멱등 키·응답 snapshot은 모두 commit되거나 모두
 rollback됩니다. 성공 응답은 commit 뒤 만들며, 응답 유실 후 같은 키·같은 입력은 저장된 동일 결과를 재생하고 다른 입력은
 `IDEMPOTENCY_CONFLICT`로 거절합니다. 실패로 rollback된 키는 저장하지 않습니다.
+
+멱등 키 조회는 상품 조회보다 먼저이므로 이미 commit된 같은 키의 응답은 이후 상품이 논리 삭제돼도 정확히 재생합니다.
+새 키로 삭제 상품을 예약하면 재고 값과 관계없이 `PRODUCT_NOT_FOUND`입니다.
 
 SQLite는 첫 검증 DB이며 단일 writer 제약 아래 독립 연결·프로세스 경합을 시험합니다. PostgreSQL은 이후 별도 단계에서
 driver·타입·제약·격리·잠금·경합 시험을 다시 수행합니다. Replica 배포나 읽기 분산은 이 구현에 포함하지 않습니다.
@@ -149,12 +173,31 @@ DB column·unique/check/foreign-key 제약은 모델과 revision에 함께 있�
 mapped class가 등록된 Base를 import하고 `target_metadata = Base.metadata`로 설정합니다. 빈 DB의 `upgrade head`,
 downgrade/re-upgrade와 `alembic check`를 검증하며 `Base.metadata.create_all()`은 앱 시작 경로에 두지 않습니다.
 
+## Product audit timestamp와 opt-in soft delete
+
+`TimestampMixin`은 Python `system_clock()`의 aware UTC 값으로 `created_at`·`updated_at`을 만들고 ORM/Core update에
+`updated_at`을 갱신합니다. FastCRUD 0.22.3의 update·delete도 aware UTC를 기록합니다. `UTCDateTime`은
+`DateTime(timezone=True)`를 사용하고 SQLite가 timezone 정보를 제거해 반환한 값만 UTC로 복원합니다. 이는 PostgreSQL의
+timezone-aware column 선택과도 일치하는 타입 의도이지만 PostgreSQL 동작을 검증했다는 뜻은 아닙니다.
+
+이 시각은 ORM persistence audit 시각이며 예약 Service에 주입하는 업무 clock과 구분합니다. ORM 경로 밖의 bulk/raw SQL은
+자동 갱신을 보장하지 않으므로 필요한 audit 값을 SQL에 명시해야 합니다. 이전 revision의 product는 새 migration 실행 시작
+시각 하나를 `created_at`·`updated_at`에 backfill합니다. 이는 과거 생성 시각이 아니라 legacy row의 audit 시작 근사치입니다.
+최종 schema에는 계속 적용되는 server default를 남기지 않습니다.
+
+`SoftDeleteMixin`은 `is_deleted=False`와 nullable `deleted_at`을 독립적으로 제공하며 현재는 `ProductModel`만 조합합니다.
+삭제는 FastCRUD `delete(..., commit=False)`로 바깥 transaction에 참여합니다. 활성 product 조회와 조건부 재고 차감은
+`is_deleted=False`를 명시합니다. product ID는 전체 table primary key라 삭제 후에도 재사용하거나 자동 부활시키지 않습니다.
+seed의 `ON CONFLICT DO NOTHING`도 재고와 삭제 상태를 바꾸지 않으며, 삭제 ID를 seed하면 후속 `get_product`가
+`ProductNotFound`를 반환합니다. 전역 query filter, restore API, 자동 CRUD/delete HTTP endpoint는 범위 밖입니다.
+
 ## 구현·검증 상태
 
 | 단계 | 상태 | 확인 내용 |
 | --- | --- | --- |
 | 설정·migration | 완료 | 독립 Python/package/lock/DB와 ORM metadata, Alembic revision을 생성했습니다. |
 | FastCRUD 경계 | 완료 | product create/get, reservation·idempotency create, key get에 FastCRUD 0.22.3을 사용합니다. |
+| product audit·soft delete | 완료 | UTC create/update, FastCRUD delete, 활성 조회·재고 필터, rollback·seed·재생 정책을 검증했습니다. |
 | 예약 계약 | 완료 | 조건부 차감·snapshot·멱등성·commit 실패·thread/process 경합을 독립 SQLite에서 시험합니다. |
 | HTTP·관측 | 완료 | 기존 envelope·Problem·health·logging·HTTP/DB metrics 계약을 같은 의미로 시험합니다. |
 | 후속 | 미구현 | `crud_router`, pagination 공개 API, 인증, PostgreSQL, Compose·운영 배포입니다. |
@@ -163,9 +206,13 @@ downgrade/re-upgrade와 `alembic check`를 검증하며 `Base.metadata.create_al
 
 - Python 3.14.7, FastAPI 0.141.1, FastCRUD 0.22.3, SQLAlchemy 2.0.53,
   Uvicorn 0.53.0을 lockfile 환경에서 확인했습니다.
-- Ruff check·format check와 ty가 통과했고 전체 pytest는 96개가 통과했습니다.
+- Ruff check·format check와 ty가 통과했고 전체 pytest는 100개가 통과했습니다.
   Starlette 1.6.0의 `anyio.abc.BlockingPortal` 별칭 경고 1건은 기준선과 같은
   좁은 filter로 표시합니다.
+- 새 audit migration은 빈 DB의 upgrade/check/downgrade/re-upgrade뿐 아니라 이전 revision의 product·reservation·
+  idempotency snapshot을 채운 DB에서도 기존 값 보존, UTC backfill, FK 무결성을 검증했습니다. ORM/Core/FastCRUD update의
+  `updated_at`, 생성 시각 유지, delete commit/rollback, 삭제 상품 조회·재고·seed·ID 재사용 거절과 commit된 키 재생도
+  격리 SQLite에서 확인했습니다.
 - uv build가 wheel과 sdist를 만들었고 패키지에 `.env`, data, 가상환경,
   test DB가 포함되지 않았습니다.
 - 새 임시 SQLite에서 Alembic upgrade/check/downgrade/re-upgrade/check가 통과했습니다.

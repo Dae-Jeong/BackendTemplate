@@ -9,8 +9,10 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from pathlib import Path
 from threading import Barrier
+from typing import cast
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import insert, text
 from sqlalchemy.engine import make_url
@@ -19,6 +21,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from template_fastcrud_api.bootstrap.app import create_app
 from template_fastcrud_api.core.settings import Settings
 from template_fastcrud_api.models.reservations import ProductModel, ReservationModel
+from template_fastcrud_api.repositories.reservations import product_crud
 
 
 def database_state(url: str) -> tuple[int, int, int]:
@@ -248,6 +251,35 @@ def test_replay_and_conflicting_input(client: TestClient, database_url: str) -> 
     conflict = client.post("/v1/reservations", json={"product_id": "other"})
     assert conflict.status_code == 409
     assert conflict.json()["code"] == "IDEMPOTENCY_CONFLICT"
+    assert database_state(database_url) == (0, 1, 1)
+
+
+def test_deleted_product_still_replays_committed_key_but_rejects_new_key(
+    client: TestClient, database_url: str
+) -> None:
+    first = client.post("/v1/reservations", json={"product_id": "demo"})
+    assert first.status_code == 201
+
+    async def delete_product() -> None:
+        app = cast(FastAPI, client.app)
+        async with app.state.primary_session_factory() as session:
+            async with session.begin():
+                await product_crud.delete(db=session, commit=False, id="demo")
+
+    assert client.portal is not None
+    client.portal.call(delete_product)
+    replay = client.post("/v1/reservations", json={"product_id": "demo"})
+    assert replay.status_code == 201
+    assert replay.content == first.content
+    assert replay.headers["Idempotency-Replayed"] == "true"
+
+    missing = client.post(
+        "/v1/reservations",
+        json={"product_id": "demo"},
+        headers={"Idempotency-Key": "after-delete"},
+    )
+    assert missing.status_code == 404
+    assert missing.json()["code"] == "PRODUCT_NOT_FOUND"
     assert database_state(database_url) == (0, 1, 1)
 
 

@@ -1,12 +1,11 @@
 from sqlalchemy import JSON, CheckConstraint, ForeignKey, Integer, String
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
+
+from template_fastcrud_api.models.base import Base
+from template_fastcrud_api.models.mixins import SoftDeleteMixin, TimestampMixin
 
 
-class Base(DeclarativeBase):
-    pass
-
-
-class ProductModel(Base):
+class ProductModel(TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "products"
     __table_args__ = (
         CheckConstraint("available >= 0", name="ck_products_available_nonnegative"),
