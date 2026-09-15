@@ -52,9 +52,9 @@ Nest runner도 이 결과를 숨기지 않고 callback/commit/rollback/release �
 
 | 작은 작업 | 책임·파일/시그니처 | callsite 변화와 보존할 동작 | 검증 매핑 |
 | --- | --- | --- | --- |
-| FA-1 기술 경계 유지 판정 | 변경하지 않음. `reserve(...)`는 business transaction/outcome, `acquire_primary_connection(...)`는 acquire/acquisition metric/error를 계속 담당 | nested body-error 판정, `TimeoutError→DatabasePoolTimeout`, SQLite busy 번역과 metric failure 격리를 유지. helper 추가 없음 | [test_reservations.py](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/python/fastapi/tests/reservations/test_reservations.py), [test_database.py](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/python/fastapi/tests/core/test_database.py) — **미실행** |
+| FA-1 기술 경계 유지 판정 | **유지 확인**. `reserve(...)`는 business transaction/outcome, `acquire_primary_connection(...)`는 acquire/acquisition metric/error를 계속 담당 | nested body-error 판정, `TimeoutError→DatabasePoolTimeout`, SQLite busy 번역과 metric failure 격리를 유지. helper 추가 없음 | [FastAPI replay 검증](fastapi-verification.md#replay-조회-명명-검증--2026-09-15) |
 | FA-2 replay 이름 명시 | **구현**. `find_matching_replay(session, key, product_id)`와 Service callsite로 변경 | key 없음/일치 replay/mismatch conflict의 세 갈래가 이름에 드러남. conflict policy를 Service로 이동하지 않고 response 불변 | [FastAPI replay 검증](fastapi-verification.md#replay-조회-명명-검증--2026-09-15) |
-| FA-3 seed scope | `seed.py:seed(product_id, stock)`가 seed application flow, repository `seed_product(session, product_id, stock)`가 제품 upsert/no-reset 소유 | seed는 `ReserveRequest`의 기존 CLI 입력 검증을 유지하고, reservation service를 호출하지 않음. 최초 stock만 기록하고 반복 seed는 현재 stock 보존 | [test_reservations.py](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/python/fastapi/tests/reservations/test_reservations.py) `test_seed_cli_preserves_existing_stock` — **미실행** |
+| FA-3 seed scope | **유지 확인**. `seed.py:seed(product_id, stock)`가 seed application flow, repository `seed_product(session, product_id, stock)`가 제품 upsert/no-reset 소유 | seed는 `ReserveRequest`의 기존 CLI 입력 검증을 유지하고, reservation service를 호출하지 않음. 최초 stock만 기록하고 반복 seed는 현재 stock 보존 | [FastAPI replay 검증](fastapi-verification.md#replay-조회-명명-검증--2026-09-15) |
 | FA-4 오류/metrics 회귀 케이스 보강 | 기존 public signatures 유지; 필요할 때만 `DatabaseMetrics.record_transaction`/`record_acquisition`의 safe recording을 재사용 | metrics failure가 업무 오류를 덮지 않고, commit/rollback/cleanup precedence를 현재 의미로 고정 | [test_metrics.py](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/python/fastapi/tests/test_metrics.py), [test_application_errors.py](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/python/fastapi/tests/test_application_errors.py) — 기존 확인 범위, 추가 케이스는 **미실행** |
 
 추가 케이스(구현 시): acquire 실패 중 metric 실패, body 예외 뒤 rollback 실패, commit
@@ -92,7 +92,7 @@ runner options·retry·replica·Interceptor·worker/Primary 재구현은 추가�
 | SP-1 paired save 이름 명시 | **구현**. `saveReservationAndReplay(Reservation reservation, String key)`와 Service callsite로 변경 | reservation row와 replay row가 paired write임을 이름으로 드러냄. `flush`는 완료가 아니며 public `@Transactional` proxy commit이 최종 경계 | [Spring Task 11 검증](spring-boot-verification.md#task-11-reservation-명명-검증) |
 | SP-2 seed scope | **구현**. `SeedConfiguration.seedProduct`가 public transactional `ProductSeedService.seed(productId, stock)`를 호출하고, concrete `ProductSeedRepository.seedIfAbsent`가 find-then-persist를 소유 | `ReservationService`·`ReservationRepository`의 seed 제거. `!no-db` 생성자 DI, 음수 검증, 신규·반복 stock 의미 유지 | [Spring Task 12 검증](spring-boot-verification.md#task-12-제품-seed-책임-분리-검증) |
 | SP-3 replay 이름/계약 유지 | **구현**. `ReservationRepository.findMatchingReplay(String key, String productId)`와 Service callsite로 변경 | conflict policy를 별도 service로 이동하지 않음. `ReservationAttempts`는 rollback 이후 별도 조회 경계 | [Spring Task 11 검증](spring-boot-verification.md#task-11-reservation-명명-검증) |
-| SP-4 attempts 경계 문서화 | `ReservationAttempts.reserve(String productId, String key)`가 `IdempotencyClaimed` catch 후 `transactions.replay` 호출 | proxy rollback 완료 후 fresh read가 필요하므로 `ReservationAttempts`를 `ReservationService`에 합치거나 self-invocation으로 바꾸지 않음 | [HttpDatabaseTest.java](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/java/spring-boot/src/test/java/com/backendtemplate/HttpDatabaseTest.java), [TransactionFailureTest.java](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/java/spring-boot/src/test/java/com/backendtemplate/TransactionFailureTest.java), [ProcessRecoveryTest.java](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/java/spring-boot/src/test/java/com/backendtemplate/ProcessRecoveryTest.java) — **미실행** |
+| SP-4 attempts 경계 문서화 | **유지 확인**. `ReservationAttempts.reserve(String productId, String key)`가 `IdempotencyClaimed` catch 후 `transactions.replay` 호출 | proxy rollback 완료 후 fresh read가 필요하므로 `ReservationAttempts`를 `ReservationService`에 합치거나 self-invocation으로 바꾸지 않음 | [Spring Task 12 검증](spring-boot-verification.md#task-12-제품-seed-책임-분리-검증) |
 
 Spring에서는 `saveReservationAndReplay`가 현재 실제 동작의 명명 개선이다.
 SP-3의 repository 메서드 이름은 `findMatchingReplay(String key, String productId)`로
@@ -113,7 +113,7 @@ seed 호출도 변경 대상으로 포함한다.
 
 ## Rails
 
-실제 경로는 `app/models/product.rb`, `reservation.rb`,
+실제 경로는 `app/models/product_id.rb`, `product.rb`, `reservation.rb`,
 `app/services/reservation_service.rb`와 해당 model/service tests이다. Rails의
 ActiveRecord transaction·scope idiom을 유지하고 repository/base/strategy framework,
 Rails idempotency 구현은 이 문서 범위가 아니다.
@@ -121,9 +121,9 @@ Rails idempotency 구현은 이 문서 범위가 아니다.
 | 작은 작업 | 책임·파일/시그니처 | callsite 변화와 보존할 동작 | 검증 매핑 |
 | --- | --- | --- | --- |
 | RA-1 ProductId 순수 규칙 소유 | **구현**. `ProductId::MAX_LENGTH = 128`과 `ProductId.normalize(value)`가 canonical rule/error를 소유; Service는 그 예외만 기존 `InvalidInput` reason으로 매핑 | Product/Reservation이 상수를 공유하고 model/request/CLI 차이 유지. 호출자별 규칙 API·자동 strip callback 없음 | [Rails ProductId 검증](rails-verification.md#productid-책임-정리-검증) |
-| RA-2 decrement 의미 고정 | `Product.decrement_stock(product_id:, timestamp:)`의 affected-row count가 reserve 가능 여부를 뜻함 | zero면 `exists_by_product_id?`로 ProductNotFound/SoldOut 구분; update_all의 atomic conditional update와 timestamp 유지. 반환 semantics를 boolean/exception으로 바꾸지 않음 | [reservation_service_test.rb](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/ruby/rails/test/services/reservation_service_test.rb), [reservation_concurrency_test.rb](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/ruby/rails/test/services/reservation_concurrency_test.rb) — **미실행** |
-| RA-3 SQLite busy owner 보류 | 현재 코드 수정 없음. `ReservationService.create`의 `sqlite_busy?` rescue와 별도 pool timeout을 유지 | 기술 오류 검출 helper 분리/변경은 실제 중복 또는 테스트 필요가 확인될 때 별도 task로 승인. model로 내리지 않음 | [reservation_service_test.rb](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/ruby/rails/test/services/reservation_service_test.rb) real SQLite lock, pool timeout — **미실행** |
-| RA-4 transaction/seed 경계 문서화 | `ReservationService.create`가 decrement+Reservation.create! 한 transaction, `Product.seed_unless_exists!`가 seed owner | seed 반복은 existing stock을 reset하지 않음. Rails idempotency/metrics는 별도 작업 | [product_test.rb](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/ruby/rails/test/models/product_test.rb), [reservation_service_test.rb](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/ruby/rails/test/services/reservation_service_test.rb) — **미실행** |
+| RA-2 decrement 의미 고정 | **유지 확인**. `Product.decrement_stock(product_id:, timestamp:)`의 affected-row count가 reserve 가능 여부를 뜻함 | zero면 `exists_by_product_id?`로 ProductNotFound/SoldOut 구분; update_all의 atomic conditional update와 timestamp 유지. 반환 semantics를 boolean/exception으로 바꾸지 않음 | [Rails ProductId 검증](rails-verification.md#productid-책임-정리-검증) |
+| RA-3 SQLite busy owner 보류 | **유지 확인**. `ReservationService.create`의 `sqlite_busy?` rescue와 별도 pool timeout을 유지 | 기술 오류 검출 helper 분리/변경은 실제 중복 또는 테스트 필요가 확인될 때 별도 task로 승인. model로 내리지 않음 | [Rails ProductId 검증](rails-verification.md#productid-책임-정리-검증) |
+| RA-4 transaction/seed 경계 문서화 | **유지 확인**. `ReservationService.create`가 decrement+Reservation.create! 한 transaction, `Product.seed_unless_exists!`가 seed owner | seed 반복은 existing stock을 reset하지 않음. Rails idempotency/metrics는 별도 작업 | [Rails ProductId 검증](rails-verification.md#productid-책임-정리-검증) |
 
 `ProductId.normalize(value)`는 strip한 String을 반환한다. nil·비문자열·빈 결과·길이
 초과에는 `ProductId::Invalid < StandardError`를 발생시키며 `reason`은 각각
