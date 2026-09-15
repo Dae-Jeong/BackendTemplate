@@ -30,6 +30,7 @@ watch:
   - RUNBOOK.md
   - design
   - python/fastapi/README.md
+  - python/fastapi-fastcrud/README.md
   - ts/nestjs/README.md
   - java/spring-boot/README.md
   - ruby/rails/README.md
@@ -59,6 +60,7 @@ nav:
       - 어디서 시작할까요: README.md
       - 템플릿 적용 Runbook: RUNBOOK.md
       - FastAPI 실행: design/implementations/quickstart.md
+      - FastAPI + FastCRUD 실행: python/fastapi-fastcrud/README.md
       - NestJS 실행: ts/nestjs/README.md
       - Spring Boot 실행: java/spring-boot/README.md
       - Rails 실행: ruby/rails/README.md
@@ -72,7 +74,7 @@ nav:
           - 실행 환경과 명령: python/fastapi/README.md
           - 폴더와 역할: design/implementations/fastapi-structure.md
           - 구현 계약: design/implementations/fastapi.md
-          - FastCRUD 독립 변형 제안: design/implementations/fastapi-fastcrud.md
+          - FastCRUD 독립 변형: design/implementations/fastapi-fastcrud.md
           - DI 선택 근거: design/implementations/fastapi-di-options.md
       - NestJS:
           - 구현 설계: design/implementations/nestjs.md

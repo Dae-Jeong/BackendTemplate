@@ -1,7 +1,8 @@
 # Backend Template
 
 백엔드 서비스를 만들고 동시성·멱등성까지 실험하는 시작점입니다.
-FastAPI·SQLite, NestJS·SQLite, Spring Boot·H2 구현을 제공합니다.
+FastAPI·SQLite, NestJS·SQLite, Spring Boot·H2 구현과 두 번째 Python 선택지인
+FastAPI + FastCRUD·SQLite 구현을 제공합니다.
 공통 응답·DI·트랜잭션·관측 계약을 각 프레임워크의 방식으로 구현합니다.
 
 Rails는 [별도 시작점](ruby/rails/README.md)으로 추가 중입니다. 인사·health와 SQLite 예약 생성·조회,
@@ -9,12 +10,13 @@ Rails는 [별도 시작점](ruby/rails/README.md)으로 추가 중입니다. 인
 
 ## 저장소 한눈에 보기
 
-세 구현은 **같은 설계를 비교하고 하나를 선택해 가져가는 독립 앱**입니다.
+각 구현은 **같은 언어 독립 설계를 비교하고 하나를 선택해 가져가는 독립 앱**입니다.
 서로 호출하는 마이크로서비스 구성이 아닙니다.
 
 | 위치 | 구성과 역할 |
 | --- | --- |
 | [`python/fastapi/`](python/fastapi/README.md) | FastAPI · uv · SQLAlchemy Core/SQLite · Alembic |
+| [`python/fastapi-fastcrud/`](python/fastapi-fastcrud/README.md) | FastAPI · uv · FastCRUD/SQLAlchemy ORM/SQLite · Alembic |
 | [`ts/nestjs/`](ts/nestjs/README.md) | NestJS · pnpm · Drizzle/SQLite · worker에서 DB 실행 |
 | [`java/spring-boot/`](java/spring-boot/README.md) | Spring Boot · Gradle · JPA/Hibernate/H2 · Flyway |
 | [`design/`](design/README.md) | 공통 설계와 구현별 상세·검증의 정본 |
@@ -35,6 +37,7 @@ Docker가 실행된 환경에서 **저장소 루트**에서 사용할 구현의 
 | 구현 | Docker Swagger | 네이티브 기본 포트 |
 | --- | --- | --- |
 | FastAPI | [18081/docs](http://127.0.0.1:18081/docs) | 18080 |
+| FastAPI + FastCRUD | 미통합 | [18092/docs](http://127.0.0.1:18092/docs) |
 | NestJS | [18084/docs](http://127.0.0.1:18084/docs) | 18083 |
 | Spring Boot | [18086/docs](http://127.0.0.1:18086/docs) | 18085 |
 
@@ -55,7 +58,8 @@ DB URL을 설정하지 않으면 인사·health·docs·metrics만 활성화합�
 
 Compose의 기본 환경 파일은 각 구현의 `.env.example`이며 별도 파일은 `BACKEND_ENV_FILE`로 지정합니다.
 네이티브 설치·빌드·실행은 각 구현의 uv·pnpm·Gradle 명령을 사용합니다.
-구체적인 명령은 [FastAPI](python/fastapi/README.md) · [NestJS](ts/nestjs/README.md) ·
+구체적인 명령은 [FastAPI](python/fastapi/README.md) ·
+[FastAPI + FastCRUD](python/fastapi-fastcrud/README.md) · [NestJS](ts/nestjs/README.md) ·
 [Spring Boot](java/spring-boot/README.md)에 있습니다.
 
 ## 구조와 패턴
@@ -108,7 +112,7 @@ flowchart LR
 
 | 영역 | 읽는 목적 | 시작 문서 |
 | --- | --- | --- |
-| 사용 가이드 | 실행하고 기능을 붙입니다. | [FastAPI](design/implementations/quickstart.md) · [NestJS](ts/nestjs/README.md) · [Spring Boot](java/spring-boot/README.md) · [모니터링](design/implementations/local-monitoring.md) |
+| 사용 가이드 | 실행하고 기능을 붙입니다. | [FastAPI](design/implementations/quickstart.md) · [FastAPI + FastCRUD](python/fastapi-fastcrud/README.md) · [NestJS](ts/nestjs/README.md) · [Spring Boot](java/spring-boot/README.md) · [모니터링](design/implementations/local-monitoring.md) |
 | 상세 설명 | 구조·설정·설계 이유를 찾아봅니다. | [프로젝트 개요](design/overview.md) · [구현별 설계](design/implementations/README.md) |
 | 작업·검증 기록 | 완료 범위와 시험 결과를 확인합니다. | [FastAPI](design/implementations/fastapi-verification.md) · [NestJS](design/implementations/nestjs-verification.md) · [Spring Boot](design/implementations/spring-boot-verification.md) |
 

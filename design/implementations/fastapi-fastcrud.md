@@ -1,50 +1,46 @@
-# Python / FastAPI + FastCRUD 제안
+# Python / FastAPI + FastCRUD 독립 변형
 
-Status: **PROPOSED · NOT IMPLEMENTED** · 독립 변형 설계 · 2026-09-15
+Status: **IMPLEMENTED · VERIFIED LOCALLY** · 독립 변형 설계·검증 · 2026-09-15
 
 ## 개요와 사용 방향
 
-이 문서는 현재 [`python/fastapi/`](../../python/fastapi/README.md)을 바꾸지 않고,
-`python/fastapi-fastcrud/`에 별도 FastAPI + FastCRUD 변형을 만든다면 어떻게 구성하고 사용하는지 제안합니다.
+이 문서는 현재 [`python/fastapi/`](../../python/fastapi/README.md)을 바꾸지 않고 만든
+[`python/fastapi-fastcrud/`](../../python/fastapi-fastcrud/README.md) 독립 앱의 선택과 검증 범위를 소유합니다.
 현재 Python/FastAPI 기준선은 SQLAlchemy Core `Table`을 직접 사용하며 구현·검증됐습니다.
-제안 변형은 FastCRUD가 요구하는 SQLAlchemy ORM mapped class로 일반 CRUD를 줄이되,
+FastCRUD 변형은 SQLAlchemy ORM mapped class로 일반 CRUD를 줄이되,
 예약의 원자성·멱등성처럼 업무 의미가 있는 흐름은 Service와 명시적 SQL을 유지합니다.
 
 두 앱은 비교 후 하나를 선택해 가져가는 독립 앱입니다. 패키지·lockfile·migration·테스트를 각각 소유하며
-공유 framework나 공통 `BaseRepository`를 새로 만들지 않습니다. 이 문서의 경로·명령·코드는 모두 향후 설정안이며,
-현재 실행 가능한 앱·Compose selector·포트가 있다는 뜻이 아닙니다.
+공유 framework나 공통 `BaseRepository`를 새로 만들지 않습니다. 네이티브 기본 포트는
+`127.0.0.1:18092`이며 Compose·컨테이너·공유 모니터링에는 연결하지 않았습니다.
 
-### 향후 초기 설정
+### 프로젝트 생성 기록
 
-아래는 변형 구현을 시작하기로 결정한 뒤 저장소 루트에서 수행할 **예정 명령**입니다.
-`uv init`과 `uv add`, Alembic CLI가 생성·의존성·migration 환경을 소유합니다.
+아래 공식 명령으로 프로젝트·의존성·Alembic 환경·lockfile을 생성했습니다.
 
 ```sh
-uv init --app --package --name template-fastcrud-api \
-  --python "$(cat python/fastapi/.python-version)" --no-workspace --vcs none \
+uv tool run --from uv==0.12.10 uv init --app --package \
+  --name template-fastcrud-api --python 3.14.7 --no-workspace --vcs none \
   python/fastapi-fastcrud
-uv add --project python/fastapi-fastcrud \
-  fastapi fastcrud "sqlalchemy[asyncio]" aiosqlite alembic \
-  pydantic-settings uvicorn prometheus-client
+uv tool run --from uv==0.12.10 uv add --project python/fastapi-fastcrud \
+  "fastcrud>=0.22.3,<0.23" "sqlalchemy[asyncio]>=2.0.52,<2.1" \
+  fastapi aiosqlite alembic pydantic-settings uvicorn prometheus-client
 cd python/fastapi-fastcrud
-uv run alembic init -t async migrations
+uv tool run --from uv==0.12.10 uv run alembic init -t async migrations
 ```
 
-`--python`에는 새 최신값이 아니라 현재 기준선의 `python/fastapi/.python-version` 값을 전달합니다.
-의존성 버전은 실제 착수 시 uv가 만든 lockfile과 Python 호환성을 함께 검증합니다. 먼저 실제 ORM mapped class와
-제약을 정의하고 모든 모델을 등록한 `Base.metadata`를 `migrations/env.py`의 `target_metadata`에 연결하며,
-제안 변형의 DB URL을 Alembic 설정 경로에 연결해야 합니다. 이 전제가 끝난 뒤에만 다음 명령을 실행합니다.
+`--python`은 기준선과 같은 3.14.7입니다. mapped class와 제약을 정의하고
+`Base.metadata`를 `migrations/env.py`의 `target_metadata`에 연결한 뒤 revision을 생성했습니다.
 
 ```sh
-uv run alembic revision --autogenerate -m "create reservation tables"
-uv run alembic upgrade head
+uv tool run --from uv==0.12.10 uv lock
+uv tool run --from uv==0.12.10 uv run --locked alembic revision \
+  --autogenerate -m "create reservation tables"
 ```
 
-`revision --autogenerate` 결과는 그대로 신뢰하지 않고 제약·인덱스·upgrade/downgrade를 검토합니다.
-앱 lifespan에서 table을 만들거나 migration을 실행하지 않습니다.
-
-구현 뒤 사용 흐름은 migration 적용 → seed 또는 fixture 준비 → API 실행 → 일반 CRUD와 예약 계약 시험 순서입니다.
-검증 전에는 구체적인 실행 명령, 주소, 컨테이너 실행법을 사용 안내로 승격하지 않습니다.
+생성된 revision의 check·foreign key·unique 제약과 upgrade/downgrade/re-upgrade를 시험했습니다.
+앱 lifespan은 table 생성이나 migration을 수행하지 않습니다. 실제 실행 순서는
+[`README`](../../python/fastapi-fastcrud/README.md)가 소유합니다.
 
 ## FastCRUD 기능과 이 변형의 선택
 
@@ -61,7 +57,7 @@ FastCRUD 0.22.3의 `create(..., commit=False)`는 내부에서 `flush()`와 `ref
 `schema_to_select`가 없으면 반환은 `None`이며, 지정하면 기본은 `dict`, `return_as_model=True`이면 해당 Pydantic
 모델을 반환합니다. 이 동작은 버전 변경 시 회귀 시험으로 다시 고정합니다.
 
-## 제안 구조와 구성 요소
+## 구현 구조와 구성 요소
 
 `src/`와 `tests/`는 형제이며, 실제 책임이 생긴 파일만 만듭니다. 아래 소스 경로는 공통으로
 `src/template_fastcrud_api/` 아래에 있으며, 폴더가 빈 package를 미리 만들라는 뜻은 아닙니다.
@@ -101,63 +97,13 @@ FastCRUD는 Repository 구현 도구이지 transaction 경계가 아닙니다. H
 Service가 `async with session.begin()`으로 한 업무의 commit/rollback을 결정합니다. Repository의 모든 쓰기는
 `commit=False`를 명시하며 내부 Service나 Repository가 중첩 `begin()`을 열지 않습니다. 한 Session을 동시 task에 공유하지 않습니다.
 
-??? example "예시: 일반 CRUD Repository와 Service (설명용, 전체 앱으로 실행할 수 없음)"
-
-    ```python
-    # repositories/products.py
-    from fastcrud import FastCRUD
-    from pydantic import BaseModel
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-    from template_fastcrud_api.contracts.products import CreateProduct, ProductRecord
-    from template_fastcrud_api.models.products import Product
-
-
-    class ProductCreateData(BaseModel):
-        id: str
-        available: int
-
-
-    class ProductSelectedData(BaseModel):
-        id: str
-        available: int
-
-
-    product_crud = FastCRUD(Product)
-
-
-    async def create_product(
-        session: AsyncSession, command: CreateProduct
-    ) -> ProductRecord:
-        selected = await product_crud.create(
-            db=session,
-            object=ProductCreateData(id=command.product_id, available=command.stock),
-            commit=False,
-            schema_to_select=ProductSelectedData,
-            return_as_model=True,
-        )
-        return ProductRecord(product_id=selected.id, available=selected.available)
-    ```
-
-    ```python
-    # services/products.py
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-    from template_fastcrud_api.contracts.products import CreateProduct, ProductRecord
-    from template_fastcrud_api.repositories.products import create_product
-
-
-    async def register_product(
-        session: AsyncSession, command: CreateProduct
-    ) -> ProductRecord:
-        async with session.begin():
-            result = await create_product(session, command)
-        return result
-    ```
-
-    Repository의 `ProductCreateData`와 `ProductSelectedData`는 FastCRUD 저장 경계 전용이며 HTTP schema가 아닙니다.
-    FastCRUD가 `commit=False` create에서 수행하는 flush+refresh 뒤 필요한 열만 내부 `ProductRecord`로 옮깁니다.
-    Service에는 FastAPI `Depends`, HTTP schema, ORM mapped class가 들어오거나 나가지 않습니다.
+`repositories/reservations.py`의 `ProductCreate`·`ProductSelect`·
+`ReservationCreate`·`IdempotencyCreate`·`IdempotencySelect`는 FastCRUD 저장
+경계 전용 Pydantic 입력입니다. HTTP schema와 공유하지 않습니다. `create_product`는
+라이브러리 동작을 보여 주는 Repository 예제이며 공개 product CRUD endpoint는 만들지 않았습니다.
+반환이 필요한 product create/get만 `schema_to_select`와 `return_as_model=True`를
+사용하고 내부 `Product` contract로 변환합니다. 예약·멱등 키 create는 반환이 필요하지
+않아 기본 `None`을 사용합니다.
 
 ## 예약은 명시적 SQL로 유지합니다
 
@@ -170,10 +116,10 @@ writer 선점을 대신하지 않으며, 같은 키 경합을 키 조회 전부�
 
 ```python
 changed = await session.scalar(
-    update(Product)
-    .where(Product.id == product_id, Product.available > 0)
-    .values(available=Product.available - 1)
-    .returning(Product.id)
+    update(ProductModel)
+    .where(ProductModel.id == product_id, ProductModel.available > 0)
+    .values(available=ProductModel.available - 1)
+    .returning(ProductModel.id)
 )
 ```
 
@@ -183,10 +129,11 @@ rollback됩니다. 성공 응답은 commit 뒤 만들며, 응답 유실 후 같�
 `IDEMPOTENCY_CONFLICT`로 거절합니다. 실패로 rollback된 키는 저장하지 않습니다.
 
 SQLite는 첫 검증 DB이며 단일 writer 제약 아래 독립 연결·프로세스 경합을 시험합니다. PostgreSQL은 이후 별도 단계에서
-driver·타입·제약·격리·잠금·경합 시험을 다시 수행합니다. Replica 배포나 읽기 분산은 이 제안에 포함하지 않습니다.
+driver·타입·제약·격리·잠금·경합 시험을 다시 수행합니다. Replica 배포나 읽기 분산은 이 구현에 포함하지 않습니다.
 
-기존 HTTP/DB metrics는 이름만 보고 복사하지 않습니다. transaction 완료 시점, SQLAlchemy event 연결, label cardinality,
-FastCRUD가 추가하는 query 경로를 확인한 뒤 같은 의미가 증명되는 지표만 재사용합니다. 미검증 수치를 기준선과 합산하지 않습니다.
+기존 HTTP/DB metrics는 transaction 완료 시점, SQLAlchemy event 연결, label cardinality,
+FastCRUD query 경로를 동일한 시험으로 다시 확인했습니다. 두 앱의 process-local registry는
+독립이며 실행 중 수치를 서로 합산하지 않습니다.
 
 ## `crud_router`의 제한된 용도
 
@@ -197,24 +144,40 @@ FastCRUD가 추가하는 query 경로를 확인한 뒤 같은 의미가 증명�
 
 ## ORM metadata와 Alembic
 
-현재 기준선의 Core `Table`은 제안 변형에서 `DeclarativeBase`를 상속한 ORM mapped class로 옮깁니다.
-DB column·unique/check/foreign-key 제약은 모델과 revision에서 함께 검토합니다. Alembic `migrations/env.py`는 모든
-mapped class가 등록된 Base를 import하고 `target_metadata = Base.metadata`로 설정합니다. 빈 DB의 `upgrade head`, 기존
-revision에서 upgrade, downgrade 정책, `alembic check`를 검증하며 `Base.metadata.create_all()`은 앱 시작 경로에 두지 않습니다.
+현재 기준선의 Core `Table`을 `DeclarativeBase`를 상속한 ORM mapped class로 옮겼습니다.
+DB column·unique/check/foreign-key 제약은 모델과 revision에 함께 있습니다. Alembic `migrations/env.py`는 모든
+mapped class가 등록된 Base를 import하고 `target_metadata = Base.metadata`로 설정합니다. 빈 DB의 `upgrade head`,
+downgrade/re-upgrade와 `alembic check`를 검증하며 `Base.metadata.create_all()`은 앱 시작 경로에 두지 않습니다.
 
-## 단계별 작업 제안
+## 구현·검증 상태
 
-| 단계 | 작업 | 완료 기준 |
+| 단계 | 상태 | 확인 내용 |
 | --- | --- | --- |
-| 1. 설정 | uv app·기준 Python·의존성·settings·Engine/Session·Alembic 환경을 만듭니다. | lockfile 재현, 앱별 자원 격리, 시작 실패와 dispose, 빈 DB migration이 통과합니다. |
-| 2. ORM·일반 CRUD | mapped class와 함수형 Repository, 작은 관리 CRUD를 추가합니다. | `commit=False`와 반환 schema 동작, rollback, ORM 비노출, pagination 상한을 시험합니다. |
-| 3. 예약 계약 | 조건부 차감·멱등 키·snapshot과 Service transaction을 옮깁니다. | 정상·품절·없는 상품·저장 실패·같은/다른 키 경합·응답 유실 재생이 통과합니다. |
-| 4. 통합 검증 | HTTP 오류/envelope·관측·migration 회귀를 연결합니다. | metrics 의미를 재검증하고 SQLite 전체 시험과 strict 문서 build가 통과합니다. 인증은 이 데모 범위에 포함하지 않습니다. |
-| 5. 가이드 | 검증된 실행·seed·종료 절차만 사용 안내에 올립니다. | 새 사용자가 문서 명령으로 재현하며 미구현 PostgreSQL·배포 범위가 분리됩니다. |
+| 설정·migration | 완료 | 독립 Python/package/lock/DB와 ORM metadata, Alembic revision을 생성했습니다. |
+| FastCRUD 경계 | 완료 | product create/get, reservation·idempotency create, key get에 FastCRUD 0.22.3을 사용합니다. |
+| 예약 계약 | 완료 | 조건부 차감·snapshot·멱등성·commit 실패·thread/process 경합을 독립 SQLite에서 시험합니다. |
+| HTTP·관측 | 완료 | 기존 envelope·Problem·health·logging·HTTP/DB metrics 계약을 같은 의미로 시험합니다. |
+| 후속 | 미구현 | `crud_router`, pagination 공개 API, 인증, PostgreSQL, Compose·운영 배포입니다. |
+
+2026-09-15 로컬 검증 결과는 다음과 같습니다.
+
+- Python 3.14.7, FastAPI 0.141.1, FastCRUD 0.22.3, SQLAlchemy 2.0.53,
+  Uvicorn 0.53.0을 lockfile 환경에서 확인했습니다.
+- Ruff check·format check와 ty가 통과했고 전체 pytest는 97개가 통과했습니다.
+  Starlette 1.6.0의 `anyio.abc.BlockingPortal` 별칭 경고 1건은 기준선과 같은
+  좁은 filter로 표시합니다.
+- uv build가 wheel과 sdist를 만들었고 패키지에 `.env`, data, 가상환경,
+  test DB가 포함되지 않았습니다.
+- 새 임시 SQLite에서 Alembic upgrade/check/downgrade/re-upgrade/check가 통과했습니다.
+- 격리한 `127.0.0.1:54709`에서 docs·readiness·greeting·HTTP/DB metrics,
+  예약 성공·같은 키 재생·다른 입력 충돌을 확인한 뒤 서버를 종료했습니다.
+
+PostgreSQL·인증·운영 배포·Compose·`crud_router`는 검증하거나 구현하지 않았습니다.
 
 ## 근거
 
-확인일: 2026-09-15. FastCRUD 최신 확인 버전은 0.22.3(2026-06-21)이며 구현 착수 시 다시 확인합니다.
+확인일: 2026-09-15. uv lock과 설치 환경에서 FastCRUD 0.22.3의 실제 signature와
+`create` 구현을 확인했습니다.
 
 - [FastCRUD 저장소와 기능·요구사항](https://github.com/benavlabs/fastcrud)
 - [고급 CRUD와 `commit=False`](https://benavlabs.github.io/fastcrud/advanced/crud/)
