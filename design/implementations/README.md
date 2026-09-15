@@ -7,6 +7,8 @@
 [예약 코드 책임 정리](responsibility-cleanup.md)는 기존 개발·검증 규칙에 대한 검토와 구현별 상태를 담습니다.
 승인된 NestJS·FastAPI·Spring Boot·Rails 책임 정리 항목은 구현별 검증 기록과 함께 완료했습니다.
 
+[트랜잭션 실행 책임 정리안](transaction-boundaries.md)은 서비스와 DB 기술 처리의 분리를 다루는 후속 설계입니다. 구현 전 검토안입니다.
+
 ## 현재 제공 범위
 
 추가 준비 중인 [Prisma·Rails 작업 단계](prisma-rails-tasks.md)는 구현 완료 범위와 구분합니다.

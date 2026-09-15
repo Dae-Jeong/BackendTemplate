@@ -2,6 +2,9 @@
 
 Status: 승인된 구현별 책임 정리 완료 · 2026-09-15
 
+후속 [트랜잭션 실행 책임 정리안](transaction-boundaries.md)은 FA-1·RA-3 유지 판정과
+FastAPI/NestJS outcome을 재검토합니다. 아직 제안 단계이며 아래 내용은 현재 구현과 이전 완료 기록입니다.
+
 이 문서는 현재 코드의 책임 검토 결과와 작게 나눈 후속 작업을 기록한다. 공통
 정책을 복제하지 않고 [개발 원칙](../engineering.md), [Backend](../backend.md),
 [관측](../observability.md), 각 구현 설계·검증 문서를 기준으로 삼는다. 아래의
