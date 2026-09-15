@@ -1,30 +1,31 @@
 # Kotlin / Spring Boot 구현 설계
 
-Status: **구현 예정 · 도구 선택만 공식 Initializr와 공식 문서로 검증** · 2026-09-16
+Status: **Task 1–8 구현·자동 시험·native 재시작 검증 완료 · 독립 검토 대기** · 2026-09-16
 
 `kotlin/spring-boot/`는 Java 구현을 대체하거나 호출하지 않는 독립 sibling 앱입니다.
 공통 HTTP·DB·관측 계약과 Spring/JPA의 동작은 [Java 구현 설계](spring-boot.md),
 [내부 동작](spring-boot-internals.md), [검증 기록](spring-boot-verification.md)을 기준으로 삼고,
-이 문서는 Kotlin/JVM에서 달라지는 구현 선택만 소유합니다. 아래의 포트·파일 배치·시험은 계획이며 아직 실행 결과가 아닙니다.
+이 문서는 Kotlin/JVM에서 달라지는 구현 선택만 소유합니다. 실제 Kotlin 결과는
+[Kotlin 검증 기록](kotlin-spring-boot-verification.md)에 있습니다.
 
-## 검증된 도구 기준과 계획
+## 검증된 도구와 구현
 
 2026-09-16 공식 Initializr metadata와 생성 결과, Spring Boot·Framework·Data 및 Kotlin 공식 문서를 확인했습니다.
 
-| 항목 | 계획 | 현재 확인된 근거 |
+| 항목 | 실제 선택 | 확인 근거 |
 | --- | --- | --- |
 | 생성 | Spring Initializr API, `language=kotlin`, `type=gradle-project-kotlin`, package `com.backendtemplate` | metadata가 Kotlin·Gradle Kotlin DSL·Java 25와 Boot 4.1.1 stable을 제공함 |
 | 빌드 | JDK 25, Gradle Wrapper 9.7.1, Kotlin JVM/Spring/JPA plugin 2.3.21, Boot 4.1.1 | 같은 입력의 공식 생성물이 이 조합을 생성함 |
 | 서버 | synchronous Spring MVC/Tomcat | Initializr `web`가 `spring-boot-starter-webmvc`를 생성함 |
-| 저장 | 단일 Primary H2 file, JPA/Hibernate, Flyway, Hikari | Java 계약을 별도 데이터 파일에서 재현할 계획 |
+| 저장 | 단일 Primary H2 file, JPA/Hibernate, Flyway, Hikari | 별도 file·실제 transaction/경합/restart 시험 통과 |
 | JSON | Jackson Kotlin module, 명시적인 DTO/deserializer | 공식 생성물이 `tools.jackson.module:jackson-module-kotlin`을 포함함 |
 | 포트 | native `127.0.0.1:18093`; 향후 container 게시 `127.0.0.1:18094` 예약 | 저장소 내 sibling 충돌 방지를 위한 프로젝트 결정 |
 
 Initializr 요청은 `bootVersion=4.1.1`, `javaVersion=25`,
 `dependencies=web,data-jpa,flyway,h2,validation,actuator`를 사용합니다. metadata가 표시한
-stable 목록과 별개로 위 exact version 요청의 생성 성공을 확인했습니다. 생성물은 시작점으로 보존한 뒤
+stable 목록과 별개로 위 exact version 요청의 생성 성공을 확인했습니다. 생성물을 시작점으로 보존한 뒤
 H2 console 의존성을 제거하고 Springdoc·Prometheus와 strict dependency lock을
-Java 구현 수준으로 추가합니다. 버전은 구현 착수일에 같은 공식 경로로 다시 확인하며, 여기 적힌 값이 미래 최신 버전이라는 뜻은 아닙니다.
+Java 구현 수준으로 추가했습니다. 후속 upgrade는 같은 공식 경로로 다시 확인하며, 여기 적힌 값이 미래 최신 버전이라는 뜻은 아닙니다.
 
 ## Kotlin 경계 선택
 
@@ -119,15 +120,15 @@ self-invocation·직접 생성으로 transaction이 적용된다고 기대하지
 | synthetic JPA constructor와 entity openness | ordinary entity를 source-level 가짜 기본값 없이 Hibernate가 생성·lazy reference할 수 있어야 함 | reflection/Hibernate load, proxy 가능 여부, schema validate |
 | Kotlin metadata nullability | compile-time 표현과 Jackson/Spring Data runtime 결과를 별개로 확인 | missing/null/number 422 및 nullable repository miss |
 | data class generated methods | contract/DTO에만 사용하고 entity association이나 lazy field를 순회하지 않음 | 실제 HTTP serialization, entity가 data class가 아님을 review |
-| top-level function JVM facade | 상태 없는 검증만 배치하고 Bean·전역 registry처럼 사용하지 않음 | Spring context 없이 순수 validation test |
+| top-level function JVM facade | 상태 없는 검증만 배치하고 Bean·전역 registry처럼 사용하지 않음 | HTTP·실제 DB 분기와 code review에서 숨은 의존성 없음 |
 
 Java의 thread-bound transaction, persistence context, flush/commit, conditional update, MDC와 concurrent collection 설명은
 [Java 내부 동작](spring-boot-internals.md)을 다시 사용합니다. Kotlin이라고 이 JVM/Spring 의미가 바뀌었다고 주장하지 않습니다.
 
 ## 검증 범위와 제외
 
-첫 구현 wave는 Java의 기존 35개 시험 시나리오를 Kotlin 앱에서 모두 실행 가능한 기준선으로 이식합니다.
-HTTP/file DB/독립 JVM/fault-injection harness는 `src/test/java`에 Java integration test로 먼저 재사용·최소 적응해도 됩니다.
+첫 구현 wave는 Java의 기존 35개 시험 시나리오를 Kotlin 앱에서 모두 실행 가능한 기준선으로 이식했습니다.
+HTTP/file DB/독립 JVM/fault-injection harness는 `src/test/java`의 Java integration test로 재사용·최소 적응했습니다.
 Jackson/DTO, Kotlin nullability, proxy/final, JPA entity plugin처럼 언어 차이를 직접 검증하는 시험은
 `src/test/kotlin`에 작성합니다. production main source는 모두 Kotlin이며 Java production source는 두지 않습니다.
 복사한 Java test를 위해 production에 Java식 compatibility accessor나 wrapper를 추가하지 않고 test callsite를 Kotlin getter에 맞춥니다.
@@ -137,7 +138,7 @@ Jackson/DTO, Kotlin nullability, proxy/final, JPA entity plugin처럼 언어 차
 같은 키 replay/conflict, 다른 키 stock 비음수, 저장 실패 전체 rollback, lock/pool/commit 실패,
 embedded 재시작, no-db, schema mismatch, 독립 상품 isolation과 rollback 뒤 fresh read를 포함합니다.
 
-현재 세 설계 파일의 소유 범위에는 Compose·Dockerfile·중앙 README/MkDocs 메뉴·공유 모니터링 변경을 포함하지 않습니다.
+현재 Kotlin 구현 범위에는 Compose·Dockerfile·중앙 README/MkDocs 메뉴·공유 모니터링 변경을 포함하지 않습니다.
 구현 수락 뒤 coordinator가 README·구현 안내·MkDocs discoverability를 연결하는 별도 통합 task는 전체 작업에 포함합니다.
 container 포트 18094만 예약하며 이번 wave에는 구현하지 않습니다. coroutine/WebFlux, PostgreSQL, auth, key 만료,
 Replica/sharding, 자동 retry framework, 범용 transaction wrapper도 범위 밖입니다.

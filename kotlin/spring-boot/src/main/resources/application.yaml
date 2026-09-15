@@ -1,0 +1,66 @@
+spring:
+  application:
+    name: ${APP_NAME:backend-template-kotlin-spring}
+  datasource:
+    url: ${DB_PRIMARY_URL:}
+    username: ${DB_USERNAME:sa}
+    password: ${DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:4}
+      minimum-idle: 1
+      connection-timeout: ${DB_POOL_TIMEOUT_MS:1000}
+  h2:
+    console:
+      enabled: false
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  lifecycle:
+    timeout-per-shutdown-phase: ${SHUTDOWN_TIMEOUT_SECONDS:10}s
+server:
+  address: ${SERVER_HOST:127.0.0.1}
+  port: ${SERVER_PORT:18093}
+  shutdown: graceful
+  error:
+    include-message: never
+    include-stacktrace: never
+management:
+  endpoints:
+    web:
+      base-path: /
+      exposure:
+        include: health,prometheus
+      path-mapping:
+        prometheus: metrics
+        health: actuator-health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+logging:
+  structured:
+    format:
+      console: ecs
+    ecs:
+      service:
+        version: ${SERVICE_VERSION:0.0.1}
+    json:
+      customizer: com.backendtemplate.observation.SafeLoggingCustomizer
+  level:
+    root: WARN
+    com.backendtemplate: ${LOG_LEVEL:INFO}
+springdoc:
+  api-docs:
+    path: /openapi.json
+  swagger-ui:
+    path: /docs
+app:
+  environment: ${APP_ENVIRONMENT:local}

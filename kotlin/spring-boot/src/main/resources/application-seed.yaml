@@ -1,0 +1,4 @@
+app:
+  seed:
+    product-id: demo
+    stock: 10

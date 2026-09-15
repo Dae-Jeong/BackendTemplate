@@ -1,10 +1,11 @@
 # Kotlin Spring Boot 폴더 구조와 활용 기준
 
-Status: **구현 예정 · 경로와 책임 설계** · 2026-09-16
+Status: **Task 1–8 실제 파일 기준 · 자동 시험 38개 통과** · 2026-09-16
 
 대상은 독립 앱 `kotlin/spring-boot/`이며 package는 `com.backendtemplate`입니다.
 공통 Spring/JPA 책임은 [Java 구조](spring-boot-structure.md), Kotlin 고유 선택과 transaction은
-[Kotlin 구현 설계](kotlin-spring-boot.md)를 봅니다. 아래 파일은 계획이며 아직 존재하지 않습니다.
+[Kotlin 구현 설계](kotlin-spring-boot.md)를 봅니다. 실행 증거는
+[검증 기록](kotlin-spring-boot-verification.md)에 있습니다.
 
 ```mermaid
 flowchart LR
@@ -21,7 +22,7 @@ flowchart LR
     TX -. 완료 callback .-> OBS["observation<br/>logs · metrics"]
 ```
 
-## 계획 경로
+## 실제 경로
 
 ```text
 kotlin/spring-boot/
@@ -57,7 +58,7 @@ kotlin/spring-boot/
 
 ## 책임 배치
 
-| 영역 | 계획 책임 |
+| 영역 | 실제 책임 |
 | --- | --- |
 | `BackendTemplateApplication.kt` | `runApplication`, seed profile/non-web 실행, 시작 실패 기록·종료 |
 | `config/` | immutable configuration properties, UTC `Clock`, no-db 환경 전처리, `JpaTransactionManager`, seed, OpenAPI |
@@ -94,14 +95,13 @@ container용 파일과 Compose 연결은 이번 wave에 만들지 않으며 1809
 
 ## 시험 배치
 
-`src/test/kotlin`은 다음 Kotlin 고유·실제 경계 시험을 우선합니다.
+`src/test/kotlin`은 다음 Kotlin 고유·실제 경계 시험을 소유합니다.
 
-- fixed `Clock` service와 실제 HTTP DTO serialization
-- missing/null/number의 정확한 422 location/code
-- default-final 상태와 compiler plugin 적용 뒤 실제 Spring transaction proxy
+- missing/null/number/malformed JSON의 실제 HTTP 422 location/code
+- default-final 상태와 compiler plugin 적용 뒤 실제 Spring transaction proxy rollback
 - synthetic no-arg/all-open entity의 Hibernate load와 nullable repository miss
 
-Java 구현의 35개 실제 계약 harness는 초기에는 `src/test/java`로 복사·최소 적응할 수 있습니다.
+Java 구현의 35개 실제 계약 harness는 `src/test/java`로 복사·최소 적응했습니다.
 특히 HTTP, 임시 file/TCP H2, 독립 JVM worker, shutdown, migration, commit/rollback fault injection은
 언어를 바꾸는 것보다 동일 실패 조건을 보존하는 것이 우선입니다. Kotlin `data class`의 Java accessor 등 interop 차이만
 test callsite에서 명시적으로 적응하며 production compatibility accessor/wrapper나 Java source를 남기지 않습니다.

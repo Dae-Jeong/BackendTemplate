@@ -1,10 +1,24 @@
 # Kotlin Spring Boot 단계별 구현 task
 
-Status: **구현 대기 · 공식 생성 기준 확인 완료** · 2026-09-16
+Status: **Task 1–8 구현·자동 시험·native 검증 완료 · Task 9–10 대기** · 2026-09-16
 
 대상은 `kotlin/spring-boot/` 하나입니다. 설계는 [구현 설계](kotlin-spring-boot.md), 파일 책임은
 [구조](kotlin-spring-boot-structure.md), 공통 수락 계약과 기존 증거는 [Java 검증 기록](spring-boot-verification.md)을 봅니다.
-아래 Task는 모두 미구현이며, 완료 표시는 실제 명령·HTTP·DB 증거를 별도 verification 문서에 남긴 뒤에만 바꿉니다.
+Task 1–8의 명령·HTTP·DB 증거는 [Kotlin 검증 기록](kotlin-spring-boot-verification.md)에 있습니다.
+
+| Task | 상태 | 실제 결과 |
+| --- | --- | --- |
+| 1 공식 생성·빌드 | 완료 | Initializr Kotlin 2.3.21·Boot 4.1.1·Wrapper 9.7.1, JDK 25, strict lock |
+| 2 설정·DI·no-db | 완료 | constructor DI, native 18093 health/greeting, 예약 404 |
+| 3 HTTP·Problem | 완료 | typed DTO, 정확한 missing/null/type 422와 전역 오류 계약 |
+| 4 H2·Flyway·JPA | 완료 | 독립 file, migration/validate, ordinary entity와 nullable repository |
+| 5 transaction | 완료 | 실제 proxy, claim flush, rollback 뒤 fresh read, commit 뒤 응답 |
+| 6 경합·멱등 | 완료 | 실제 H2 connection/JVM의 replay/conflict/stock/rollback/isolation |
+| 7 관측·수명 | 완료 | JSON logs, request context, 실제 완료 metrics, SIGTERM/lock 반환 |
+| 8 전체 수락 | 완료 | 기존 Java 35개 + Kotlin 실제 경계 3개 = 38개 통과, production Java 0개 |
+| 9 독립 검토 | 대기 | coordinator 별도 dispatch |
+| 10 공유 문서 통합 | 대기 | coordinator 소유 |
+| 11 container 판단 | 후속 | 18094만 예약, 미구현 |
 
 ## Task 1. 공식 Kotlin 프로젝트 생성과 빌드 기준 고정
 
