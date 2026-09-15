@@ -10,6 +10,7 @@
 ## 현재 제공 범위
 
 추가 준비 중인 [Prisma·Rails 작업 단계](prisma-rails-tasks.md)는 구현 완료 범위와 구분합니다.
+[FastAPI + FastCRUD 변형](fastapi-fastcrud.md)은 현재 FastAPI 기준선을 바꾸지 않는 독립 **제안**이며 아직 구현하지 않았습니다.
 
 Rails의 최소 API 작업은 [사용 안내](../../ruby/rails/README.md) · [설계](rails.md) ·
 [구조](rails-structure.md) · [Task](rails-tasks.md) · [검증](rails-verification.md)에서 확인합니다.

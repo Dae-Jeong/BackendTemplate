@@ -72,6 +72,7 @@ nav:
           - 실행 환경과 명령: python/fastapi/README.md
           - 폴더와 역할: design/implementations/fastapi-structure.md
           - 구현 계약: design/implementations/fastapi.md
+          - FastCRUD 독립 변형 제안: design/implementations/fastapi-fastcrud.md
           - DI 선택 근거: design/implementations/fastapi-di-options.md
       - NestJS:
           - 구현 설계: design/implementations/nestjs.md
