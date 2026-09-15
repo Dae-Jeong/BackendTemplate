@@ -1,6 +1,6 @@
 # FastAPI 검증 케이스
 
-Status: SQLite 1차 구현·자동 검증·컨테이너 smoke 완료 · 아래 실행 결과와 후속 명세 구분 · 2026-09-08
+Status: SQLite 1차 구현·자동 검증 및 replay 명명 정리 완료 · 아래 실행 결과와 후속 명세 구분 · 2026-09-15
 
 [구현 설계](fastapi.md)의 상태와 경계를 검증합니다. 실행 결과 절은 실제 관측이며 이후 케이스 표는 검증 기준입니다.
 진행 상태는 [단계별 task](fastapi-tasks.md), 실행 명령은 [사용 안내](../../python/fastapi/README.md)가 소유합니다.
@@ -40,6 +40,15 @@ Grafana health는 200이며 실제 DB 화면에서도 UP·점유 0/상한 4·Ses
 로컬 컨테이너는 아래 보완으로 migration을 선행하며 네이티브 실행은 사용 안내의 순서를 따릅니다. 임의 전원 장애·파일 손상·OOM의 무손실,
 PostgreSQL 격리 수준/처리량·다중 worker HTTP 서버의 성능·운영 Sentry·인증/권한은 검증하지 않았습니다.
 이 결과는 로컬 SQLite 1차 완료 판정이며 운영 서비스 전체 준비 완료를 뜻하지 않습니다.
+
+## replay 조회 명명 검증 — 2026-09-15
+
+Repository의 `find_matching_replay(session, key, product_id)`와 Service callsite만 변경했습니다.
+`uv run --locked pytest tests/reservations/test_reservations.py`의 19개 시험으로 동일 입력 재생,
+다른 입력 충돌, rollback 후 재시도, commit 전후 종료와 독립 연결·프로세스 경합을 확인했습니다.
+전체 95개 시험과 `uv build`, Ruff check/format, ty도 통과했습니다. 기존 Starlette
+`BlockingPortal` deprecation 경고 1개는 그대로 표시했습니다.
+새 테스트·transaction runner·replay repository는 추가하지 않았고 seed와 pool/metrics 경계도 변경하지 않았습니다.
 
 ## 로컬 자동 migration 실행 결과
 

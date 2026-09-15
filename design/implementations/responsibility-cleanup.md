@@ -47,18 +47,18 @@ Nest runner도 이 결과를 숨기지 않고 callback/commit/rollback/release �
 ## FastAPI
 
 실제 경로는 `services/reservations.py:reserve/ reserve_once`,
-`repositories/reservations.py:seed_product/get_replay/decrease_stock/save_*`,
+`repositories/reservations.py:seed_product/find_matching_replay/decrease_stock/save_*`,
 `core/database.py:acquire_primary_connection`, `seed.py:seed`이다.
 
 | 작은 작업 | 책임·파일/시그니처 | callsite 변화와 보존할 동작 | 검증 매핑 |
 | --- | --- | --- | --- |
 | FA-1 기술 경계 유지 판정 | 변경하지 않음. `reserve(...)`는 business transaction/outcome, `acquire_primary_connection(...)`는 acquire/acquisition metric/error를 계속 담당 | nested body-error 판정, `TimeoutError→DatabasePoolTimeout`, SQLite busy 번역과 metric failure 격리를 유지. helper 추가 없음 | [test_reservations.py](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/python/fastapi/tests/reservations/test_reservations.py), [test_database.py](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/python/fastapi/tests/core/test_database.py) — **미실행** |
-| FA-2 replay 이름 명시 | `get_replay(session, key, product_id)`를 `find_matching_replay(session, key, product_id)`로 rename하고 Service callsite만 변경 | key 없음/일치 replay/mismatch conflict의 세 갈래가 이름에 드러남. conflict policy를 Service로 이동하지 않고 response 불변 | [test_reservations.py](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/python/fastapi/tests/reservations/test_reservations.py) replay/conflict 및 concurrent cases — **미실행** |
+| FA-2 replay 이름 명시 | **구현**. `find_matching_replay(session, key, product_id)`와 Service callsite로 변경 | key 없음/일치 replay/mismatch conflict의 세 갈래가 이름에 드러남. conflict policy를 Service로 이동하지 않고 response 불변 | [FastAPI replay 검증](fastapi-verification.md#replay-조회-명명-검증--2026-09-15) |
 | FA-3 seed scope | `seed.py:seed(product_id, stock)`가 seed application flow, repository `seed_product(session, product_id, stock)`가 제품 upsert/no-reset 소유 | seed는 `ReserveRequest`의 기존 CLI 입력 검증을 유지하고, reservation service를 호출하지 않음. 최초 stock만 기록하고 반복 seed는 현재 stock 보존 | [test_reservations.py](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/python/fastapi/tests/reservations/test_reservations.py) `test_seed_cli_preserves_existing_stock` — **미실행** |
 | FA-4 오류/metrics 회귀 케이스 보강 | 기존 public signatures 유지; 필요할 때만 `DatabaseMetrics.record_transaction`/`record_acquisition`의 safe recording을 재사용 | metrics failure가 업무 오류를 덮지 않고, commit/rollback/cleanup precedence를 현재 의미로 고정 | [test_metrics.py](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/python/fastapi/tests/test_metrics.py), [test_application_errors.py](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/python/fastapi/tests/test_application_errors.py) — 기존 확인 범위, 추가 케이스는 **미실행** |
 
 추가 케이스(구현 시): acquire 실패 중 metric 실패, body 예외 뒤 rollback 실패, commit
-실패 후 같은 key 재시도, key mismatch가 재고를 바꾸지 않는지. `get_replay`를 별도
+실패 후 같은 key 재시도, key mismatch가 재고를 바꾸지 않는지. `find_matching_replay`를 별도
 ReplayRepository로 쪼개거나 generic transaction runner를 도입하는 것은 제외한다.
 
 ## NestJS
@@ -156,7 +156,7 @@ Rails idempotency 구현은 이 문서 범위가 아니다.
 
 각 작업은 아래 목표와 예상 결과를 갖는 독립 review 단위다.
 
-### Task 1. FastAPI replay 명명
+### Task 1. FastAPI replay 명명 — 구현 완료
 
 목표:
 FA-2의 이름과 Service 호출을 변경한다. FA-1/3은 유지 판정이며 구현 작업이 아니다.
@@ -215,7 +215,7 @@ RA-1의 단일 규칙을 구현한다. RA-2/4는 유지, RA-3 helper 추출은 �
 동적 수락 조건(테스트/build)은 구현 후 별도 실행 기록으로 남기며, 아래 작업 순서에서는
 통과를 주장하지 않는다.
 
-Task 2의 NestJS runner와 이어진 worker 가독성 범위만 2026-09-15에 구현·검증했다. Task 1·3·4·5는 pending이며
+Task 1과 Task 2의 NestJS runner·worker 가독성 범위를 2026-09-15에 구현·검증했다. Task 3·4·5는 pending이며
 각 구현 작업에서 검증·커밋을 나눈다. rename에 기존 검증으로 충분하면
 구현을 복제하는 새 테스트를 추가하지 않는다. FA-4와 추가 오류 케이스는 기존 검증의
 누락이 확인될 때만 보강하며 이름 변경에 기술 경계 재구현을 끼워 넣지 않는다.

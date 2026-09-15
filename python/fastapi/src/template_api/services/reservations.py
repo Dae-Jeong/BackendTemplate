@@ -14,7 +14,7 @@ from template_api.core.database_metrics import DatabaseMetrics
 from template_api.exceptions.database import DatabaseBusy, DatabasePoolTimeout
 from template_api.repositories.reservations import (
     decrease_stock,
-    get_replay,
+    find_matching_replay,
     save_idempotency,
     save_reservation,
 )
@@ -23,7 +23,7 @@ from template_api.repositories.reservations import (
 async def reserve_once(
     session: AsyncSession, product_id: str, key: str, clock: Clock
 ) -> ReservationResult:
-    existing = await get_replay(session, key, product_id)
+    existing = await find_matching_replay(session, key, product_id)
     if existing is not None:
         return ReservationResult(existing, replayed=True)
     await decrease_stock(session, product_id)

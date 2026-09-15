@@ -53,7 +53,7 @@ async def save_reservation(session: AsyncSession, reservation: Reservation) -> N
     )
 
 
-async def get_replay(
+async def find_matching_replay(
     session: AsyncSession, key: str, product_id: str
 ) -> Reservation | None:
     row = (

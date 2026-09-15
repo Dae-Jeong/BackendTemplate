@@ -1,6 +1,6 @@
 # FastAPI 단계별 구현 task
 
-Status: Task 1~8 SQLite 1차 구현·검증 완료 · PostgreSQL 전환은 후속 · 2026-09-08
+Status: Task 1~8 SQLite 구현 및 replay 명명 정리 완료 · PostgreSQL 전환은 후속 · 2026-09-15
 
 마무리 보완: 사용자 승인으로 로컬 컨테이너의 migration 성공 → API 시작 순서를 연결했습니다.
 새 DB·재시작 보존·DB 미사용·migration 실패 시 시작 차단·SIGTERM 종료의
@@ -321,6 +321,12 @@ Status: 완료 · 2026-09-08. [실행 결과와 재현 절차](fastapi-verificat
 
 트래픽 급증의 용량·지연 목표와 본격 부하 실험은 별도 합의합니다.
 동시성 시험 성공을 처리량 보장으로 설명하지 않으며 [Runtime Review](../runtime-review.md)를 따릅니다.
+
+### Task 8-3. replay 조회 명명
+
+Repository의 `get_replay`를 실제 일치 판단을 드러내는 `find_matching_replay`로 바꾸고
+Service callsite를 함께 변경했습니다. 별도 replay 계층이나 새 테스트는 추가하지 않았으며,
+기존 예약 전체 시험으로 일치 재생·다른 입력 충돌·재고 불변과 경합·복구 동작을 확인했습니다.
 
 ## Task 9. PostgreSQL 전환
 
