@@ -101,7 +101,7 @@ class ReservationServiceTest < ActiveSupport::TestCase
     end
 
     Product.where(product_id: "product-1").update_all(stock: 0)
-    assert_raises(ReservationService::SoldOut) do
+    assert_raises(ReservationErrors::SoldOut) do
       ReservationService.create(
         product_id: "product-1",
         clock: -> { Time.utc(2026, 9, 15, 4, 5, 6) }
@@ -118,7 +118,7 @@ class ReservationServiceTest < ActiveSupport::TestCase
     locking_connection = SQLite3::Database.new(ActiveRecord::Base.connection_db_config.database)
     locking_connection.execute("BEGIN IMMEDIATE")
 
-    assert_raises(ReservationService::DatabaseBusy) do
+    assert_raises(DatabaseErrors::Busy) do
       ReservationService.create(
         product_id: "product-1",
         clock: -> { Time.utc(2026, 9, 15, 4, 5, 6) }
@@ -141,13 +141,59 @@ class ReservationServiceTest < ActiveSupport::TestCase
     end
 
     stub_const(Object, :Reservation, controlled_reservation) do
-      error = assert_raises(ReservationService::DatabasePoolTimeout) do
+      error = assert_raises(DatabaseErrors::PoolTimeout) do
         ReservationService.create(
           product_id: "product-1",
           clock: -> { Time.utc(2026, 9, 15, 4, 5, 6) }
         )
       end
       assert_same pool_error, error.cause
+    end
+  end
+
+  test "translates lock and pool failures from reservation reads" do
+    reservation_id = "f" * 32
+    pool_error = ActiveRecord::ConnectionTimeoutError.new
+    reservation_id_format = Reservation::ID_FORMAT
+    pool_failure_reservation = Class.new do
+      const_set(:ID_FORMAT, reservation_id_format)
+      define_singleton_method(:find_by) { |**| raise pool_error }
+    end
+
+    stub_const(Object, :Reservation, pool_failure_reservation) do
+      error = assert_raises(DatabaseErrors::PoolTimeout) do
+        ReservationService.find(reservation_id: reservation_id)
+      end
+      assert_same pool_error, error.cause
+    end
+
+    busy_cause = SQLite3::BusyException.new("database is busy")
+    statement_error = ActiveRecord::StatementInvalid.new("controlled read failure")
+    busy_failure_reservation = Class.new do
+      const_set(:ID_FORMAT, reservation_id_format)
+      define_singleton_method(:find_by) { |**| raise statement_error, cause: busy_cause }
+    end
+    stub_const(Object, :Reservation, busy_failure_reservation) do
+      error = assert_raises(DatabaseErrors::Busy) do
+        ReservationService.find(reservation_id: reservation_id)
+      end
+      assert_same statement_error, error.cause
+    end
+  end
+
+  test "does not classify an unrelated reservation read failure as database busy" do
+    statement_error = ActiveRecord::StatementInvalid.new("not a lock failure")
+    reservation_id_format = Reservation::ID_FORMAT
+    failing_reservation = Class.new do
+      const_set(:ID_FORMAT, reservation_id_format)
+      define_singleton_method(:find_by) { |**| raise statement_error }
+    end
+
+    stub_const(Object, :Reservation, failing_reservation) do
+      error = assert_raises(ActiveRecord::StatementInvalid) do
+        ReservationService.find(reservation_id: "f" * 32)
+      end
+      assert_same statement_error, error
     end
   end
 end

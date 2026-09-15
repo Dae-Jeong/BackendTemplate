@@ -1,6 +1,6 @@
 # Rails 검증 기록
 
-Status: Task 1~4 및 예약 업무 검증 책임 정리 자동 검사 완료 · 2026-09-16
+Status: Task 1~4 및 중앙 HTTP 예외 경계 자동 검사 완료 · 2026-09-16
 
 ## 도구와 생성 명령
 
@@ -88,10 +88,34 @@ unknown field 거절, invalid ID 422, not found 404, `Idempotency-Key` 미지원
 성공 응답으로 바꾸지 않으며, Service 시험은 자동 test transaction을 끄고 별도 SQLite connection에서 commit된 row를 읽습니다.
 또한 실제 insert 직후 제어된 예외를 발생시켜 transaction rollback 뒤 row count가 0인지 확인했습니다.
 
+## 중앙 HTTP 예외 경계 검증
+
+Rails 8.1 공식 API의 handler 역순 탐색 의미에 맞춰 넓은 `StandardError`를 먼저, 구체적인 기능·DB 오류를 뒤에
+등록했습니다. 인사와 예약 생성·조회 action에서 inline rescue와 Problem hash를 제거하고 실제 route 요청으로 기존
+422 field location, 제품·예약 404, 품절 409, DB busy·pool timeout 503과 `Retry-After: 1`을 확인했습니다.
+
+예약 조회는 pool 획득 실패와 `SQLite3::BusyException` cause를 각각 `DatabaseErrors::PoolTimeout`과 `Busy`로 번역합니다.
+일반 `ActiveRecord::StatementInvalid`는 busy로 오분류하지 않고 그대로 HTTP 경계까지 전파되어 고정
+`INTERNAL_ERROR` 500이 됩니다. 인사·예약 생성·예약 조회의 예상하지 못한 예외 세 경로 모두
+`application/problem+json` 500이며 제어된 secret 예외 문구가 body에 없음을 확인했습니다.
+
+프로젝트 전용 Ruby 4.0.6과 Bundler 4.0.16으로 아래 공식 검사를 다시 실행했습니다.
+
+| 명령 | 실제 결과 |
+| --- | --- |
+| `bundle check` | dependencies satisfied |
+| `bin/rails zeitwerk:check` | `All is good!` |
+| `bin/rails test` | 50 runs, 189 assertions, 실패·오류·skip 0 |
+| `bin/rubocop` | 49 files, offense 0 |
+
+기존 실제 SQLite 별도 연결 commit, INSERT 실패·post-insert 예외 rollback, write lock, raw CHECK,
+독립 process 재고 경합 시험도 전체 suite에서 함께 통과했습니다. health live/readiness의 전용 `status` body 시험도
+변경 없이 통과했습니다.
+
 Task 4는 정상 생성의 재고 1 차감, 상품 없음 404 `PRODUCT_NOT_FOUND`, 품절 409 `SOLD_OUT`, 실패 시 예약 없음,
 raw INSERT의 음수 재고 CHECK 거절을 확인합니다. 예약 INSERT는 실제 unique violation을 일으켜 같은 transaction에서 먼저 차감한
 재고가 원복되는지 확인했습니다. 별도 SQLite 연결이 `BEGIN IMMEDIATE` write lock을 가진 상태에서 Active Record busy handler를
-50ms로 제한한 실제 lock 시험은 `DatabaseBusy`로 끝났고 stock 2·예약 0을 유지했습니다. pool timeout은 실제 pool 고갈 실측이
+50ms로 제한한 실제 lock 시험은 `DatabaseErrors::Busy`로 끝났고 stock 2·예약 0을 유지했습니다. pool timeout은 실제 pool 고갈 실측이
 아니라 `ActiveRecord::ConnectionTimeoutError` 번역과 cause 보존 시험이며 HTTP의 두 timeout은 각각 503 공개 코드와
 `Retry-After: 1`을 확인했습니다.
 
@@ -147,4 +171,4 @@ Puma PID 90765가 `127.0.0.1:18088`에서 Ruby 4.0.6 / Rails 8.1.3.1로 시작�
 Dockerfile은 생성 후 내부 3000, 향후 host 18089, 비 root, production SQLite 경로를 검토했지만 사용자 범위에 따라
 image build와 container 실행은 하지 않았습니다. root Compose·script·문서 메뉴·공통 포트 표도 변경하지 않았습니다.
 SQLite 경합은 단일 host의 독립 process로 검증했으며 PostgreSQL 동시성이나 처리량을 검증한 것이 아닙니다. 실제 pool 고갈,
-멱등성, metrics, 전체 Problem/404/405/500, 부하와 운영 배포는 미검증 후속 범위입니다.
+멱등성, metrics, controller 생성 전 routing 404/405 Problem 처리, 부하와 운영 배포는 미검증 후속 범위입니다.

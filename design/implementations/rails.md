@@ -1,6 +1,6 @@
 # Rails 구현 설계
 
-Status: Task 1~4 재고 원자성·네이티브 검증 완료 · 2026-09-15
+Status: Task 1~4와 중앙 HTTP 예외 경계 검증 완료 · 2026-09-16
 
 ## 버전 선택
 
@@ -83,4 +83,28 @@ Task 3의 기존 예약은 products table이 없을 때 임의 `product_id` text
 legacy row와 직접 SQL 쓰기의 참조 무결성은 이 schema가 보장하지 않습니다.
 
 멱등 저장·재생과 인증은 없습니다. `Idempotency-Key`는 무시하지 않고 미지원 422로 거절합니다.
-metrics, 공통 404/405/500을 포함한 전체 Problem 처리, 관측과 Compose 연결도 후속 Task가 소유합니다.
+metrics, controller 생성 전 routing 404/405 처리, 관측과 Compose 연결도 후속 Task가 소유합니다.
+
+## HTTP 예외 경계 결정
+
+Rails의 `rescue_from`을 `ApplicationController`가 포함하는 하나의 `ProblemRendering` concern에서 사용합니다.
+controller action은 정상 흐름과 입력 확인만 소유하고, 인사·예약 기능의 오류 타입은 각 feature module이 Service 밖에서
+소유합니다. 공통 concern은 그 타입을 현재 Problem Details body·status·media type으로 번역하며 health의 전용
+`status` 응답은 바꾸지 않습니다.
+
+```mermaid
+flowchart LR
+    ACTION["Controller action<br/>입력 확인 · 정상 응답"] --> FEATURE["GreetingErrors · ReservationErrors<br/>기능 소유 오류"]
+    FEATURE --> BOUNDARY["ApplicationController + ProblemRendering<br/>rescue_from · Problem 응답"]
+    DB["DatabaseErrors<br/>Active Record read/write 오류 번역"] --> CLASSIFY{"실제 lock · pool timeout?"}
+    CLASSIFY -->|"예: 고정 503"| BOUNDARY
+    CLASSIFY -->|"아니오"| INTERNAL["고정 INTERNAL_ERROR 500<br/>원문 미노출"]
+    INTERNAL --> BOUNDARY
+```
+
+[Rails 8.1 `rescue_from` API](https://api.rubyonrails.org/v8.1.0/classes/ActiveSupport/Rescuable/ClassMethods.html)는
+handler를 선언의 역순·상속 계층 순으로 탐색하므로 넓은 `StandardError` handler를 먼저, 구체적인 기능 오류를 뒤에
+등록합니다. Rails guide는 `StandardError` 포착의 부작용을 경고하지만, 이 API 앱은 사용자 요구인 일관된 안전한 500 body를
+HTTP controller 경계에서만 보장해야 하므로 의도적으로 사용합니다. 고정 공개 body만 반환하고 예외 원문은 노출하지 않으며,
+분류되지 않은 DB 오류를 성공이나 lock timeout으로 바꾸지 않습니다. 이 결정은 router-level 404/405 같은 controller 생성 전
+실패까지 포괄하는 전체 framework 오류 계층을 새로 만드는 범위는 아닙니다. 공식 문서는 2026-09-16 확인했습니다.

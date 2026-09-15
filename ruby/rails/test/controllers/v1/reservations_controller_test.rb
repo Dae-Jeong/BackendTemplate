@@ -34,6 +34,7 @@ class V1::ReservationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :not_found
+    assert_equal "application/problem+json", response.media_type
     assert_equal "PRODUCT_NOT_FOUND", response.parsed_body.fetch("code")
   end
 
@@ -45,19 +46,15 @@ class V1::ReservationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :conflict
+    assert_equal "application/problem+json", response.media_type
     assert_equal "SOLD_OUT", response.parsed_body.fetch("code")
     assert_equal 0, Product.find_by!(product_id: "product-1").stock
   end
 
   test "reports database busy separately from sold out" do
     busy_service = Class.new do
-      const_set(:InvalidInput, Class.new(StandardError))
-      const_set(:SoldOut, Class.new(StandardError))
-      const_set(:DatabaseBusy, Class.new(StandardError))
-      const_set(:DatabasePoolTimeout, Class.new(StandardError))
-
       def self.create(**)
-        raise const_get(:DatabaseBusy)
+        raise DatabaseErrors::Busy
       end
     end
 
@@ -66,19 +63,15 @@ class V1::ReservationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :service_unavailable
+    assert_equal "application/problem+json", response.media_type
     assert_equal "DATABASE_BUSY", response.parsed_body.fetch("code")
     assert_equal "1", response.headers["Retry-After"]
   end
 
   test "reports database pool timeout separately from sold out" do
     timeout_service = Class.new do
-      const_set(:InvalidInput, Class.new(StandardError))
-      const_set(:SoldOut, Class.new(StandardError))
-      const_set(:DatabaseBusy, Class.new(StandardError))
-      const_set(:DatabasePoolTimeout, Class.new(StandardError))
-
       def self.create(**)
-        raise const_get(:DatabasePoolTimeout)
+        raise DatabaseErrors::PoolTimeout
       end
     end
 
@@ -87,6 +80,7 @@ class V1::ReservationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :service_unavailable
+    assert_equal "application/problem+json", response.media_type
     assert_equal "DATABASE_POOL_TIMEOUT", response.parsed_body.fetch("code")
     assert_equal "1", response.headers["Retry-After"]
   end
@@ -103,7 +97,9 @@ class V1::ReservationsControllerTest < ActionDispatch::IntegrationTest
     post "/v1/reservations", params: "{", headers: { "CONTENT_TYPE" => "application/json" }
 
     assert_response :unprocessable_content
+    assert_equal "application/problem+json", response.media_type
     assert_equal "MALFORMED_BODY", response.parsed_body.dig("errors", 0, "code")
+    assert_equal [ "body" ], response.parsed_body.dig("errors", 0, "location")
   end
 
   test "rejects missing, non-string, blank, and too-long product ids" do
@@ -119,6 +115,7 @@ class V1::ReservationsControllerTest < ActionDispatch::IntegrationTest
 
       assert_response :unprocessable_content
       assert_equal expected_code, response.parsed_body.dig("errors", 0, "code")
+      assert_equal [ "body", "product_id" ], response.parsed_body.dig("errors", 0, "location")
     end
   end
 
@@ -134,7 +131,9 @@ class V1::ReservationsControllerTest < ActionDispatch::IntegrationTest
     get "/v1/reservations/not-a-reservation-id"
 
     assert_response :unprocessable_content
+    assert_equal "application/problem+json", response.media_type
     assert_equal "INVALID_ID", response.parsed_body.dig("errors", 0, "code")
+    assert_equal [ "path", "reservation_id" ], response.parsed_body.dig("errors", 0, "location")
   end
 
   test "rejects an idempotency key because replay is not implemented yet" do
@@ -144,27 +143,76 @@ class V1::ReservationsControllerTest < ActionDispatch::IntegrationTest
          as: :json
 
     assert_response :unprocessable_content
+    assert_equal "application/problem+json", response.media_type
     assert_equal "IDEMPOTENCY_NOT_SUPPORTED", response.parsed_body.dig("errors", 0, "code")
+    assert_equal [ "header", "Idempotency-Key" ], response.parsed_body.dig("errors", 0, "location")
   end
 
   test "does not turn an unexpected persistence failure into a success response" do
     failing_service = Class.new do
-      const_set(:InvalidInput, Class.new(StandardError))
-      const_set(:SoldOut, Class.new(StandardError))
-      const_set(:DatabaseBusy, Class.new(StandardError))
-      const_set(:DatabasePoolTimeout, Class.new(StandardError))
-
       def self.create(**)
-        raise ActiveRecord::StatementInvalid, "controlled test failure"
+        raise ActiveRecord::StatementInvalid, "secret persistence failure"
       end
     end
 
     stub_const(Object, :ReservationService, failing_service) do
-      assert_raises(ActiveRecord::StatementInvalid) do
-        post "/v1/reservations", params: { product_id: "product-1" }, as: :json
+      post "/v1/reservations", params: { product_id: "product-1" }, as: :json
+    end
+
+    assert_response :internal_server_error
+    assert_equal "application/problem+json", response.media_type
+    assert_equal "INTERNAL_ERROR", response.parsed_body.fetch("code")
+    refute_includes response.body, "secret persistence failure"
+  end
+
+  test "reports database busy from the reservation read path" do
+    busy_service = Class.new do
+      def self.find(**)
+        raise DatabaseErrors::Busy
       end
     end
 
-    refute response&.successful?
+    stub_const(Object, :ReservationService, busy_service) do
+      get "/v1/reservations/#{"f" * 32}"
+    end
+
+    assert_response :service_unavailable
+    assert_equal "application/problem+json", response.media_type
+    assert_equal "DATABASE_BUSY", response.parsed_body.fetch("code")
+    assert_equal "1", response.headers["Retry-After"]
+  end
+
+  test "reports database pool timeout from the reservation read path" do
+    timeout_service = Class.new do
+      def self.find(**)
+        raise DatabaseErrors::PoolTimeout
+      end
+    end
+
+    stub_const(Object, :ReservationService, timeout_service) do
+      get "/v1/reservations/#{"f" * 32}"
+    end
+
+    assert_response :service_unavailable
+    assert_equal "application/problem+json", response.media_type
+    assert_equal "DATABASE_POOL_TIMEOUT", response.parsed_body.fetch("code")
+    assert_equal "1", response.headers["Retry-After"]
+  end
+
+  test "returns a safe problem for an unexpected reservation read error" do
+    failing_service = Class.new do
+      def self.find(**)
+        raise "secret reservation read failure"
+      end
+    end
+
+    stub_const(Object, :ReservationService, failing_service) do
+      get "/v1/reservations/#{"f" * 32}"
+    end
+
+    assert_response :internal_server_error
+    assert_equal "application/problem+json", response.media_type
+    assert_equal "INTERNAL_ERROR", response.parsed_body.fetch("code")
+    refute_includes response.body, "secret reservation read failure"
   end
 end

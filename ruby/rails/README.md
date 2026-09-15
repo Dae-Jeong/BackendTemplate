@@ -1,6 +1,6 @@
 # Rails 시작점
 
-Status: Task 1~4 재고 예약 API·네이티브 검증 완료 · 2026-09-15
+Status: Task 1~4 재고 예약 API·중앙 HTTP 예외 경계 검증 완료 · 2026-09-16
 
 Ruby 4.0.6, Rails 8.1.3.1, Active Record와 SQLite를 사용하는 독립 API 앱입니다.
 `.ruby-version`, `Gemfile`, `Gemfile.lock`이 도구와 gem 버전을 고정합니다. 시스템 Ruby나
@@ -82,6 +82,11 @@ SQLite 잠금 timeout은 503 `DATABASE_BUSY`, Active Record pool 획득 timeout�
 `Retry-After: 1`로 구분합니다. 예약 쓰기는 비멱등이므로 서버가 자동 재시도하지 않으며, 현재는 응답 유실 뒤 같은 요청의
 중복 효과를 막을 key가 없습니다.
 
+controller에서 발생한 인사·예약 기능 오류와 실제 DB lock·pool timeout은 중앙 `rescue_from` 경계가 기존 Problem Details
+응답으로 변환합니다. 분류되지 않은 오류는 예외 원문 없이 500 `INTERNAL_ERROR`를 반환합니다. health는 이 경계를 상속하지만
+live/readiness action의 전용 `status` 형식은 유지합니다. controller가 만들어지기 전 routing 404/405의 Problem 표준화는
+아직 제공하지 않습니다.
+
 Dockerfile은 Ruby 4.0.6, 내부 포트 3000, 비 root 실행, production SQLite 경로를 정의합니다.
 향후 로컬 게시 포트는 `127.0.0.1:18089`이지만 이번 작업에서는 이미지를 빌드하거나 컨테이너를 배포하지 않았습니다.
-멱등성, metrics·중앙화된 전체 Problem 처리·Compose 통합은 후속 Task입니다.
+멱등성, metrics, controller 생성 전 routing 404/405 처리와 Compose 통합은 후속 Task입니다.

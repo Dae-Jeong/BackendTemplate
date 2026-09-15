@@ -95,9 +95,9 @@ class ReservationConcurrencyTest < ActiveSupport::TestCase
         result = begin
           ReservationService.create(product_id: "race-product", clock: -> { Time.now.utc })
           "SUCCESS"
-        rescue ReservationService::SoldOut
+        rescue ReservationErrors::SoldOut
           "SOLD_OUT"
-        rescue ReservationService::DatabaseBusy
+        rescue DatabaseErrors::Busy
           "DATABASE_BUSY"
         rescue => error
           "ERROR:\#{error.class}"

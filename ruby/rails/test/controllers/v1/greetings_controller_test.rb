@@ -29,6 +29,7 @@ class V1::GreetingsControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_content
     assert_equal "application/problem+json", response.media_type
     assert_equal "REQUIRED", response.parsed_body.dig("errors", 0, "code")
+    assert_equal [ "query", "name" ], response.parsed_body.dig("errors", 0, "location")
   end
 
   test "rejects a whitespace-only name" do
@@ -57,5 +58,16 @@ class V1::GreetingsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_content
     assert_equal "INVALID_TYPE", response.parsed_body.dig("errors", 0, "code")
+  end
+
+  test "returns a safe problem for an unexpected error" do
+    Rails.application.config.x.clock = -> { raise "secret greeting failure" }
+
+    get "/v1/greetings", params: { name: "Marin" }
+
+    assert_response :internal_server_error
+    assert_equal "application/problem+json", response.media_type
+    assert_equal "INTERNAL_ERROR", response.parsed_body.fetch("code")
+    refute_includes response.body, "secret greeting failure"
   end
 end

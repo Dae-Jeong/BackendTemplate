@@ -1,6 +1,6 @@
 # Rails 단계별 Task
 
-Status: Task 1~4 및 예약 업무 검증 책임 정리 완료 · 2026-09-16
+Status: Task 1~4 및 중앙 HTTP 예외 처리 완료 · 2026-09-16
 
 ## Task 1. 실행 방식과 저장 경계
 
@@ -41,8 +41,8 @@ Status: Task 1~4 및 예약 업무 검증 책임 정리 완료 · 2026-09-16
 
 ## 다음 작은 Task
 
-Task 5는 멱등 key 저장·동일 요청 결과 재생을 이번에 확인한 원자적 재고 흐름에 붙이는 단계입니다. 인증, metrics, 전체 Problem handler,
-Compose는 각자의 작은 Task로 유지합니다.
+Task 5는 멱등 key 저장·동일 요청 결과 재생을 이번에 확인한 원자적 재고 흐름에 붙이는 단계입니다. 인증, metrics,
+controller 생성 전 routing 404/405 Problem 처리, Compose는 각자의 작은 Task로 유지합니다.
 
 ## ProductId 책임 정리
 
@@ -72,3 +72,23 @@ Active Record 조회와 transaction 순서는 Service에 유지하면서 제품�
 - Service는 `Product.exists_by_product_id?`와 `Reservation.find_by` 결과를 순수 validation에 전달하며 `SoldOut`은 계속 Service에서 발생시킵니다.
 - 입력 정규화, model validation, seed, idempotency 미지원 범위, migration과 SQL은 변경하지 않았습니다.
 - 공식 bundle 검사에서 전체 44 runs·147 assertions와 RuboCop 46 files가 통과했습니다.
+
+## Rails 중앙 custom exception 처리
+
+목표:
+Rails의 native `rescue_from`과 하나의 HTTP Problem rendering concern으로 인사·예약 action의 반복 오류 변환을 중앙화하고,
+기능 오류와 실제 DB lock/pool timeout만 명시적으로 분류합니다.
+
+예상 결과:
+
+- controller action의 inline `rescue`와 중복 Problem hash가 없어지고 기존 status·body·media type·422 field location이 유지됨
+- 제품·예약 404, 품절 409, 실제 SQLite lock·pool timeout 503과 `Retry-After: 1`이 create/read 모두 일관됨
+- 예상하지 못한 오류는 성공으로 숨지 않고 원문 없는 `INTERNAL_ERROR` 500 Problem 응답이 됨
+- health live/readiness의 전용 성공·실패 형식과 실제 transaction·rollback·독립 process 경합 검증이 유지됨
+
+결과:
+
+- `ApplicationController`가 포함하는 하나의 `ProblemRendering` concern으로 기능·DB 오류와 고정 500 변환을 모음
+- `GreetingErrors`, `ReservationErrors`가 기능 오류를 소유하고 `DatabaseErrors` 한 곳이 실제 SQLite lock cause와 pool timeout만 번역함
+- 인사, 예약 생성·조회 실제 HTTP 시험에서 기존 422·404·409·503 계약과 `Retry-After`, 원문 없는 500을 확인함
+- 전체 50 runs·189 assertions, Zeitwerk, RuboCop 49 files를 통과하고 기존 실제 SQLite rollback·독립 process 경합 시험을 유지함
