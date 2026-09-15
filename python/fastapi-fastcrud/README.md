@@ -55,7 +55,8 @@ storage 전용 Pydantic 입력을 만들고 `commit=False`로 호출하며, SDK 
 입력 모델로 직접 검증합니다. 멱등 snapshot은 별도 중복 DTO 없이 frozen 업무 `Reservation`을
 `IdempotencyRecord.response`의 타입으로 재사용합니다. Pydantic storage schema가 DB의 기존 JSON을
 읽을 때 필드·타입·datetime 형식을 runtime 검증하고, Pydantic `TypeAdapter` serializer가 FastCRUD의
-기본 `model_dump()`에서도 기존 JSON key와 UTC ISO 8601 문자열을 생성합니다. 따라서 Service는 문자열
+기본 `model_dump()`에서도 기존 JSON key와 UTC `Z` 문자열을 생성합니다. 기존 `+00:00` snapshot도 같은
+UTC datetime으로 읽고 HTTP 응답 표현은 첫 요청과 replay에서 바뀌지 않습니다. 따라서 Service는 문자열
 key로 snapshot을 조립하거나 읽지 않습니다.
 
 ## 검증

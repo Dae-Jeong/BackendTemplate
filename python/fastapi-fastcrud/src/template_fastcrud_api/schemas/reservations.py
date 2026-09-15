@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_serializer
 
 from template_fastcrud_api.contracts.reservations import Reservation
 
-_RESERVATION_ADAPTER = TypeAdapter(Reservation)
+reservation_adapter = TypeAdapter(Reservation)
 
 
 class ReserveRequest(BaseModel):
@@ -37,4 +37,4 @@ class IdempotencyRecord(BaseModel):
 
     @field_serializer("response")
     def serialize_response(self, response: Reservation) -> dict[str, str]:
-        return _RESERVATION_ADAPTER.dump_python(response, mode="json")
+        return reservation_adapter.dump_python(response, mode="json")

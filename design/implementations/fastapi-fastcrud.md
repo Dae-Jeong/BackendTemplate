@@ -128,8 +128,9 @@ rollback-only입니다. 다른 Task의 동시 Session 사용과 사전/autobegin
 필드는 같으므로 같은 storage class를 재사용하되 공개 HTTP schema와는 결합하지 않습니다.
 `IdempotencyRecord.response`는 별도 중복 model 대신 frozen 업무 `Reservation`을 중첩 타입으로 재사용합니다.
 Pydantic storage schema가 기존 JSON object를 읽을 때 필드·타입·datetime 형식을 runtime 검증하고,
-`TypeAdapter` serializer가 FastCRUD 0.22.3 create의 기본 `model_dump()` 결과를 기존 key와 UTC ISO 8601
-문자열로 만듭니다.
+`TypeAdapter` serializer가 FastCRUD 0.22.3 create의 기본 `model_dump()` 결과를 기존 key와 UTC `Z`
+문자열로 만듭니다. 기존 `+00:00` snapshot도 같은 UTC datetime으로 읽으므로 첫 요청과 replay의 HTTP
+응답 표현은 바뀌지 않습니다.
 정적 타입은 Service의 key/field 실수를 줄이지만 DB JSON 손상을 보장하지 않으며, 손상 거절은 이 runtime 검증이
 소유합니다. Service는 typed attribute와 keyword construction만 사용해 저장 입력과 `ReservationResult`를 만듭니다.
 
