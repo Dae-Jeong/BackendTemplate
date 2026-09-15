@@ -4,8 +4,8 @@
 FastAPI·SQLite, NestJS·SQLite, Spring Boot·H2 구현을 제공합니다.
 공통 응답·DI·트랜잭션·관측 계약을 각 프레임워크의 방식으로 구현합니다.
 
-Rails는 [별도 시작점](ruby/rails/README.md)으로 추가 중입니다. 인사·health와 SQLite 예약 생성·조회를 제공하며,
-재고 차감·동시성·멱등성·metrics·Compose 통합은 후속입니다.
+Rails는 [별도 시작점](ruby/rails/README.md)으로 추가 중입니다. 인사·health와 SQLite 예약 생성·조회,
+조건부 재고 차감을 제공하며 멱등성·metrics·Compose 통합은 후속입니다.
 
 ## 저장소 한눈에 보기
 

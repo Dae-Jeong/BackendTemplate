@@ -10,7 +10,7 @@
 
 Rails의 최소 API 작업은 [사용 안내](../../ruby/rails/README.md) · [설계](rails.md) ·
 [구조](rails-structure.md) · [Task](rails-tasks.md) · [검증](rails-verification.md)에서 확인합니다.
-예약 생성·조회까지 구현했으며, 아래 세 구현과 달리 재고 차감·동시성·멱등성·관측·Compose는 아직 후속 범위입니다.
+예약 생성·조회와 조건부 재고 차감을 구현했으며, 아래 세 구현과 달리 멱등성·관측·Compose는 아직 후속 범위입니다.
 
 | 구현 | 실행 | 설계·구조 | 작업·검증 |
 | --- | --- | --- | --- |

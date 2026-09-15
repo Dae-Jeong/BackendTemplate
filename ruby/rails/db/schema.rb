@@ -10,7 +10,17 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_15_043127) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_15_045203) do
+  create_table "products", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "product_id", limit: 128, null: false
+    t.integer "stock", null: false
+    t.datetime "updated_at", null: false
+    t.index ["product_id"], name: "index_products_on_product_id", unique: true
+    t.check_constraint "length(trim(product_id)) > 0 AND length(product_id) <= 128", name: "products_product_id_valid"
+    t.check_constraint "stock >= 0", name: "products_stock_nonnegative"
+  end
+
   create_table "reservations", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "product_id", limit: 128, null: false

@@ -1,6 +1,6 @@
 # Rails 단계별 Task
 
-Status: Task 1~3 완료 · 2026-09-15
+Status: Task 1~4 완료 · 2026-09-15
 
 ## Task 1. 실행 방식과 저장 경계
 
@@ -29,8 +29,17 @@ Status: Task 1~3 완료 · 2026-09-15
 - [x] 실제 SQLite 별도 연결 commit 확인과 post-insert 예외 rollback 시험
 - [x] fresh/repeated migration, data 보존, test DB env 격리, native 18088 smoke 검증
 
+## Task 4. 재고 원자성
+
+- [x] products table, 공개 ID unique와 `stock >= 0` DB CHECK 추가
+- [x] 기존 reservations의 임의 `product_id`를 보존하고 FK를 추가하지 않는 upgrade 경계 확정
+- [x] 명시적이고 반복 안전하며 기존 재고를 reset하지 않는 `bin/rails db:seed` 추가
+- [x] Service transaction의 첫 DB 작업으로 `stock > 0` 조건부 UPDATE 후 예약 INSERT
+- [x] 상품 없음 404, 품절 409, SQLite busy와 pool timeout 503 구분
+- [x] 실제 INSERT 실패 rollback, raw DB CHECK, 독립 process 경합, fresh/upgrade/repeated migration·seed 검증
+- [x] native 18088에서 재고 소진과 오류 응답 smoke 검증
+
 ## 다음 작은 Task
 
-Task 4는 products/stock schema와 조건부 재고 차감으로 동시 초과 예약을 막고 실제 경합 시험을 추가하는 단계입니다.
-멱등 key 저장·동일 요청 결과 재생은 그 원자성이 확인된 뒤 별도 단계로 붙입니다. 인증, metrics, 전체 Problem handler,
+Task 5는 멱등 key 저장·동일 요청 결과 재생을 이번에 확인한 원자적 재고 흐름에 붙이는 단계입니다. 인증, metrics, 전체 Problem handler,
 Compose는 각자의 작은 Task로 유지합니다.

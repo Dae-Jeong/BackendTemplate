@@ -1,14 +1,14 @@
 # Prisma·Rails 준비와 구현 단계
 
-Status: Rails 최소 예약 저장 완료 · 공통 Task 3 진행 중 · Prisma 적용 방식 선택 대기 · 2026-09-15
+Status: Rails 재고 원자성 구현 · 공통 Task 3 진행 중 · Prisma 적용 방식 선택 대기 · 2026-09-15
 
 목표는 NestJS에서 Prisma를 사용하고 Rails의 관용적인 API 개발을 경험하면서 기존 응답·트랜잭션·동시성·멱등성 계약을 비교하는 것입니다.
 NestJS의 기존 Drizzle 교체와 별도 비교 앱 추가 중 어느 방식인지는 사용자 선택 대기입니다.
 Rails는 `ruby/rails/`의 API 전용 앱·Active Record·SQLite로 시작합니다.
 사용자 지정 `gpt-5.6-sol` Orca 에이전트가 구현하고 중앙 에이전트가 범위·검증·통합을 관리합니다.
-Rails는 인사·health에 이어 예약 생성·조회와 명시적 transaction을 구현했습니다. 실제 검증 결과는
-[Rails 검증 기록](rails-verification.md)에 있습니다. [Rails 세부 Task 1~3](rails-tasks.md)은 완료했으며,
-이 문서의 공통 Task 3에 속하는 재고 차감·경합 방지·멱등 저장은 남아 있습니다. 다음 작은 단계는 조건부 재고 차감입니다.
+Rails는 예약 생성·조회에 조건부 재고 차감과 독립 프로세스 경합 시험을 추가했습니다. 실제 검증 결과는
+[Rails 검증 기록](rails-verification.md)에 있습니다. 세부 진행은 [Rails Task](rails-tasks.md)가 소유합니다.
+이 문서의 공통 Task 3에 속하는 멱등 저장·재생은 남아 있으며 다음 작은 단계로 진행합니다.
 
 ## Task 1. 실행 방식과 저장 경계 확정
 

@@ -18,6 +18,14 @@ class V1::ReservationsController < ApplicationController
     render json: { data: serialize(result) }, status: :created
   rescue ReservationService::InvalidInput => error
     render_invalid_input([ "body", "product_id" ], error.reason)
+  rescue ReservationService::ProductNotFound
+    render_problem(:not_found, "PRODUCT_NOT_FOUND")
+  rescue ReservationService::SoldOut
+    render_problem(:conflict, "SOLD_OUT")
+  rescue ReservationService::DatabaseBusy
+    render_problem(:service_unavailable, "DATABASE_BUSY", retry_after: "1")
+  rescue ReservationService::DatabasePoolTimeout
+    render_problem(:service_unavailable, "DATABASE_POOL_TIMEOUT", retry_after: "1")
   end
 
   def show
@@ -57,5 +65,16 @@ class V1::ReservationsController < ApplicationController
       code: "INVALID_INPUT",
       errors: [ { location: location, code: reason } ]
     }, status: :unprocessable_content, content_type: "application/problem+json"
+  end
+
+  def render_problem(status, code, retry_after: nil)
+    numeric_status = Rack::Utils.status_code(status)
+    response.set_header("Retry-After", retry_after) if retry_after
+    render json: {
+      type: "about:blank",
+      title: Rack::Utils::HTTP_STATUS_CODES.fetch(numeric_status),
+      status: numeric_status,
+      code: code
+    }, status: status, content_type: "application/problem+json"
   end
 end

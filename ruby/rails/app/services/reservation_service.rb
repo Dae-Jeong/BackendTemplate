@@ -13,12 +13,31 @@ class ReservationService
   class NotFound < StandardError
   end
 
+  class ProductNotFound < StandardError
+  end
+
+  class SoldOut < StandardError
+  end
+
+  class DatabaseBusy < StandardError
+  end
+
+  class DatabasePoolTimeout < StandardError
+  end
+
   def self.create(product_id:, clock:)
     normalized_product_id = normalize_product_id(product_id)
     timestamp = clock.call.utc
     reservation = nil
 
     Reservation.transaction do
+      changed = Product.decrement_stock(product_id: normalized_product_id, timestamp: timestamp)
+      if changed.zero?
+        raise ProductNotFound unless Product.exists_by_product_id?(normalized_product_id)
+
+        raise SoldOut
+      end
+
       reservation = Reservation.create!(
         reservation_id: SecureRandom.hex(16),
         product_id: normalized_product_id,
@@ -28,6 +47,12 @@ class ReservationService
     end
 
     reservation.to_result
+  rescue ActiveRecord::ConnectionTimeoutError => error
+    raise DatabasePoolTimeout, cause: error
+  rescue ActiveRecord::StatementInvalid => error
+    raise DatabaseBusy, cause: error if sqlite_busy?(error)
+
+    raise
   end
 
   def self.find(reservation_id:)
@@ -51,5 +76,15 @@ class ReservationService
 
     normalized_product_id
   end
-  private_class_method :normalize_product_id
+
+  def self.sqlite_busy?(error)
+    cause = error
+    while cause
+      return true if cause.is_a?(SQLite3::BusyException) || cause.is_a?(SQLite3::LockedException)
+
+      cause = cause.cause
+    end
+    false
+  end
+  private_class_method :normalize_product_id, :sqlite_busy?
 end
