@@ -69,10 +69,10 @@ FastCRUD 0.22.3의 `create(..., commit=False)`는 내부에서 `flush()`와 `ref
 | `models/base.py` | Alembic과 모든 mapped class가 공유하는 `DeclarativeBase` metadata만 소유합니다. |
 | `models/mixins.py` | 독립 조합 가능한 UTC timestamp·soft-delete column과 SQLite UTC 복원 타입을 소유합니다. |
 | `models/reservations.py` | product·reservation·idempotency mapped class와 DB 제약을 소유합니다. |
-| `repositories/` | FastCRUD 호출과 특수 SQL, ORM↔내부 계약 변환을 소유합니다. commit하지 않습니다. |
+| `repositories/` | FastCRUD 호출과 특수 SQL, ORM↔내부 계약 변환을 소유합니다. persistence shape를 정의하거나 commit하지 않습니다. |
 | `services/` | `@transactional`로 업무 범위를 표시하고 순서·정책을 소유합니다. HTTP schema와 ORM을 반환하지 않습니다. |
 | `contracts/` | HTTP·Pydantic·ORM과 분리한 불변 업무 입력·결과를 소유합니다. |
-| `schemas/` | 공개 HTTP 요청·응답과 envelope를 소유합니다. Router에서 내부 계약으로 변환합니다. |
+| `schemas/` | 공개 HTTP 요청·응답과 envelope를 소유하고, `persistence/` 하위에서 FastCRUD 전용 shape를 분리해 소유합니다. |
 | `routers/` | HTTP 검증·응답 변환을 수행하고 Service를 호출합니다. |
 | `core/` | settings·DB Engine/Session factory·`@transactional` 실행·clock·logging·metrics를 소유합니다. |
 | `http/` | Problem 응답, 예외 변환, ASGI 관측 경계를 소유합니다. |
@@ -123,11 +123,12 @@ Service의 `@transactional`이 `core/transactions.py`에서 한 업무의 begin�
 rollback-only입니다. 다른 Task의 동시 Session 사용과 사전/autobegin transaction은 거절합니다.
 수동 begin/commit/rollback, 자동 SAVEPOINT·REQUIRES_NEW·readOnly·Replica routing은 지원하지 않습니다.
 
-`repositories/reservations.py`의 `ProductSelect`·`ReservationCreate`·`IdempotencyRecord`는
-FastCRUD 경계 전용 Pydantic 모델이며 HTTP schema와 공유하지 않습니다. 같은 필드였던 멱등 키
-create/select 모델은 하나로 통합했습니다. production에서 쓰이지 않던 `create_product`는 제거했고,
-FastCRUD create 계약 시험은 test-local Pydantic 입력으로 SDK를 직접 호출합니다. FastCRUD 0.22.3의
-create는 `model_dump()`을 제공하는 Pydantic 입력 모델을 받습니다.
+`schemas/persistence/reservations.py`의 `ProductSelect`·`ReservationCreate`·`IdempotencyRecord`는
+FastCRUD 경계 전용 Pydantic 모델이며 `schemas/reservations.py`의 공개 HTTP schema와 공유하지 않습니다.
+Repository는 이 data definition을 import하고 저장 동작만 소유합니다. 같은 필드였던 멱등 키 create/select
+모델은 하나로 통합했습니다. production에서 쓰이지 않던 `create_product`는 제거했고, FastCRUD create 계약
+시험은 test-local Pydantic 입력으로 SDK를 직접 호출합니다. FastCRUD 0.22.3의 create는 `model_dump()`을
+제공하는 Pydantic 입력 모델을 받습니다.
 
 Service는 replay 확인과 재고 차감 뒤 `save_reservation_and_replay` 한 번만 호출합니다. Repository는
 reservation과 성공 snapshot의 결합 저장을 소유하고 두 FastCRUD create 모두 `commit=False`로 실행합니다.

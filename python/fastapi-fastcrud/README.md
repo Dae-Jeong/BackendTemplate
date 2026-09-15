@@ -37,11 +37,10 @@ endpoint는 등록하지 않습니다. 실제 `.env`, `data/`, `.venv/`, `dist/`
 ## 저장 경계
 
 - `models/`: `DeclarativeBase`와 DB 제약
-- `repositories/`: FastCRUD 전용 Pydantic 경계, `get()`, 조건부 재고 SQL,
-  reservation·replay 결합 저장과 내부 contract 변환
+- `repositories/`: FastCRUD 호출, 조건부 재고 SQL, reservation·replay 결합 저장과 내부 contract 변환
 - `services/`: `@transactional`로 원자 범위를 지정하고 replay 확인 → 재고 차감 → 결합 저장의 업무 순서를 표현
 - `core/transactions.py`: `session.begin()`·SQLite `BEGIN IMMEDIATE` 획득·중첩 전파·오류 번역·계측
-- `schemas/`: HTTP 입력·응답; Repository 입력과 공유하지 않음
+- `schemas/`: 공개 HTTP 입력·응답과 `persistence/` 하위의 FastCRUD 전용 Pydantic shape를 분리해 소유
 
 FastCRUD는 transaction을 소유하지 않으며 ORM 객체를 Repository 밖으로 반환하지
 않습니다. HTTP dependency는 Session 수명만 제공하고, decorated Service는 required keyword-only

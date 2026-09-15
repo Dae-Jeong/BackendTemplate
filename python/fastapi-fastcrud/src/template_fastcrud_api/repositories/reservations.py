@@ -1,7 +1,6 @@
 from datetime import datetime
 
 from fastcrud import FastCRUD
-from pydantic import BaseModel
 from sqlalchemy import update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,25 +21,11 @@ from template_fastcrud_api.models.reservations import (
     ProductModel,
     ReservationModel,
 )
-
-
-class ProductSelect(BaseModel):
-    id: str
-    available: int
-
-
-class ReservationCreate(BaseModel):
-    id: str
-    product_id: str
-    created_at: str
-
-
-class IdempotencyRecord(BaseModel):
-    key: str
-    product_id: str
-    reservation_id: str
-    response: dict[str, str]
-
+from template_fastcrud_api.schemas.persistence.reservations import (
+    IdempotencyRecord,
+    ProductSelect,
+    ReservationCreate,
+)
 
 product_crud = FastCRUD(ProductModel)
 reservation_crud = FastCRUD(ReservationModel)
