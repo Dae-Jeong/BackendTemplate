@@ -93,7 +93,7 @@ class ReservationServiceTest < ActiveSupport::TestCase
   end
 
   test "missing product and sold out leave reservations unchanged" do
-    assert_raises(ReservationService::ProductNotFound) do
+    assert_raises(ReservationErrors::ProductNotFound) do
       ReservationService.create(
         product_id: "missing",
         clock: -> { Time.utc(2026, 9, 15, 4, 5, 6) }

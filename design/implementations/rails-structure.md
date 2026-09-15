@@ -1,6 +1,6 @@
 # Rails 폴더 구조와 책임
 
-Status: Task 1~4 및 ProductId 책임 정리 실제 구조 · 2026-09-15
+Status: Task 1~4 및 예약 업무 검증 책임 정리 실제 구조 · 2026-09-16
 
 `ruby/rails/`는 Rails generator의 관용적 역할별 경로를 유지합니다.
 
@@ -12,6 +12,8 @@ app/
   controllers/v1/reservations_controller.rb
   models/application_record.rb
   models/product_id.rb
+  models/reservation_errors.rb
+  models/reservation_validation.rb
   models/greeting.rb
   models/product.rb
   models/reservation.rb
@@ -43,6 +45,15 @@ test/
   services/reservation_concurrency_test.rb
 ```
 
+```mermaid
+flowchart LR
+    C["ReservationsController<br/>입력·HTTP 변환"] --> S["ReservationService<br/>조회·변경 순서·transaction·SOLD_OUT"]
+    S --> V["ReservationValidation<br/>순수 존재 조건"]
+    S --> AR["Product · Reservation<br/>Active Record 조회·실제 SQL"]
+    V --> E["ReservationErrors<br/>업무 오류"]
+    C --> E
+```
+
 | 경로 | 책임 |
 | --- | --- |
 | `controllers/v1/greetings_controller.rb` | query 입력, service 호출, data/Problem HTTP 변환 |
@@ -52,10 +63,12 @@ test/
 | `models/application_record.rb` | Active Record 모델의 Rails 표준 상위 클래스 |
 | `models/product.rb` | 상품 조회·조건부 재고 UPDATE·반복 안전 seed와 field 제약 |
 | `models/product_id.rb` | product ID trim·길이 규칙과 입력 오류 reason을 가진 순수 모듈 |
+| `models/reservation_validation.rb` | 제품 존재 boolean과 조회된 예약 존재를 검사하는 순수 업무 검증 |
+| `models/reservation_errors.rb` | 검증과 HTTP 변환이 공유하는 제품·예약 미존재 업무 오류 |
 | `models/reservation.rb` | `reservations` table 매핑, field 제약, `ReservationResult` 변환 |
 | `models/reservation_result.rb` | HTTP·Active Record에서 분리된 예약 결과 값 |
 | `services/greeting_service.rb` | 이름 정규화·제약과 주입받은 clock으로 결과 생성 |
-| `services/reservation_service.rb` | ProductId 오류의 공개 업무 오류 번역, 조건부 재고 차감과 예약 INSERT transaction, DB timeout 구분, commit 뒤 결과 생성, ID 조회 |
+| `services/reservation_service.rb` | ProductId 오류 번역, 조회·순수 검증 호출, 조건부 재고 차감과 예약 INSERT transaction, 실제 차감 실패 뒤 SoldOut, DB timeout 구분, commit 뒤 결과 생성 |
 | `config/application.rb` | runtime settings, UTC clock, readiness callable 조립 |
 | `config/runtime_settings.rb` | env 파싱과 안전한 시작 검증 |
 | `config/database.yml` | 환경별 SQLite 파일·pool·busy timeout, test의 외부 DB env 차단 |
@@ -66,3 +79,4 @@ test/
 예약은 실제 table을 소유하므로 모델과 migration을 함께 두되 controller는 entity를 직접 serialize하지 않습니다.
 예약 Service가 transaction을 소유하고 Product가 SQL을 소유합니다. `reservations.product_id`는 Task 3 데이터를 보존하기 위해
 FK 없이 유지하므로 legacy·직접 DB 쓰기의 참조 무결성은 보장하지 않습니다.
+ReservationValidation은 boolean 또는 조회된 Reservation만 받고 DB 조회·쓰기·transaction을 수행하지 않습니다.

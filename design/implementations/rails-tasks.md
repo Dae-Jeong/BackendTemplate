@@ -1,6 +1,6 @@
 # Rails 단계별 Task
 
-Status: Task 1~4 및 ProductId 책임 정리 완료 · 2026-09-15
+Status: Task 1~4 및 예약 업무 검증 책임 정리 완료 · 2026-09-16
 
 ## Task 1. 실행 방식과 저장 경계
 
@@ -53,3 +53,22 @@ Compose는 각자의 작은 Task로 유지합니다.
 - [x] 새 규칙 단위시험과 전체 SQLite stock·rollback·경합·HTTP 회귀 검증
 
 이 책임 정리는 위의 예약 멱등성 Task 5를 구현한 것이 아닙니다.
+
+## 예약 업무 검증 책임 정리
+
+목표:
+Active Record 조회와 transaction 순서는 Service에 유지하면서 제품·예약 존재라는 순수 업무 조건을 별도 validation에 둡니다.
+
+예상 결과:
+
+- `ReservationValidation`이 DB 호출 없이 제품 존재 boolean과 조회된 예약 존재를 검사함
+- Service가 `ProductId.normalize`, 실제 조건부 차감 실패 뒤 `SoldOut`, transaction과 DB 오류 번역을 계속 소유함
+- 제품·예약 미존재 오류가 Service에 종속되지 않은 feature module에 있고 controller가 같은 오류를 변환함
+- Active Record model validation, `Data` 결과, 실제 조건부 stock SQL과 기존 HTTP·rollback·경합 계약이 유지됨
+
+결과:
+
+- `ReservationErrors`에는 별도 빈 Base 없이 `ProductNotFound`와 `NotFound`만 두고 validation과 controller가 공유합니다.
+- Service는 `Product.exists_by_product_id?`와 `Reservation.find_by` 결과를 순수 validation에 전달하며 `SoldOut`은 계속 Service에서 발생시킵니다.
+- 입력 정규화, model validation, seed, idempotency 미지원 범위, migration과 SQL은 변경하지 않았습니다.
+- 공식 bundle 검사에서 전체 44 runs·147 assertions와 RuboCop 46 files가 통과했습니다.

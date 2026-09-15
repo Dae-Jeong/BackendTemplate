@@ -52,7 +52,6 @@ class V1::ReservationsControllerTest < ActionDispatch::IntegrationTest
   test "reports database busy separately from sold out" do
     busy_service = Class.new do
       const_set(:InvalidInput, Class.new(StandardError))
-      const_set(:ProductNotFound, Class.new(StandardError))
       const_set(:SoldOut, Class.new(StandardError))
       const_set(:DatabaseBusy, Class.new(StandardError))
       const_set(:DatabasePoolTimeout, Class.new(StandardError))
@@ -74,7 +73,6 @@ class V1::ReservationsControllerTest < ActionDispatch::IntegrationTest
   test "reports database pool timeout separately from sold out" do
     timeout_service = Class.new do
       const_set(:InvalidInput, Class.new(StandardError))
-      const_set(:ProductNotFound, Class.new(StandardError))
       const_set(:SoldOut, Class.new(StandardError))
       const_set(:DatabaseBusy, Class.new(StandardError))
       const_set(:DatabasePoolTimeout, Class.new(StandardError))
@@ -152,7 +150,6 @@ class V1::ReservationsControllerTest < ActionDispatch::IntegrationTest
   test "does not turn an unexpected persistence failure into a success response" do
     failing_service = Class.new do
       const_set(:InvalidInput, Class.new(StandardError))
-      const_set(:ProductNotFound, Class.new(StandardError))
       const_set(:SoldOut, Class.new(StandardError))
       const_set(:DatabaseBusy, Class.new(StandardError))
       const_set(:DatabasePoolTimeout, Class.new(StandardError))

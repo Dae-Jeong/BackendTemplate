@@ -10,12 +10,6 @@ class ReservationService
     end
   end
 
-  class NotFound < StandardError
-  end
-
-  class ProductNotFound < StandardError
-  end
-
   class SoldOut < StandardError
   end
 
@@ -33,8 +27,7 @@ class ReservationService
     Reservation.transaction do
       changed = Product.decrement_stock(product_id: normalized_product_id, timestamp: timestamp)
       if changed.zero?
-        raise ProductNotFound unless Product.exists_by_product_id?(normalized_product_id)
-
+        ReservationValidation.validate_product_exists(Product.exists_by_product_id?(normalized_product_id))
         raise SoldOut
       end
 
@@ -61,8 +54,7 @@ class ReservationService
     raise InvalidInput, "INVALID_ID" unless Reservation::ID_FORMAT.match?(reservation_id)
 
     reservation = Reservation.find_by(reservation_id: reservation_id)
-    raise NotFound if reservation.nil?
-
+    reservation = ReservationValidation.validate_reservation_exists(reservation)
     reservation.to_result
   end
 

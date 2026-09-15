@@ -1,6 +1,6 @@
 # Rails 검증 기록
 
-Status: Task 1~4 및 ProductId 책임 정리 자동 검사 완료 · 2026-09-15
+Status: Task 1~4 및 예약 업무 검증 책임 정리 자동 검사 완료 · 2026-09-16
 
 ## 도구와 생성 명령
 
@@ -59,6 +59,25 @@ commit/rollback·busy, stock 차감과 독립 process 경합을 재검증했습�
 
 프로젝트 전용 Ruby 4.0.6에서 bundle check, Zeitwerk, 전체 test, RuboCop 44 files와
 Brakeman error/security warning 0을 확인했습니다. migration·callback·dependency 변경은 없습니다.
+
+## 예약 업무 검증 책임 정리 검증
+
+`ReservationServiceTest`는 제품 미존재 `ReservationErrors::ProductNotFound`와 실제 Service의 stock 차감·INSERT rollback·
+SQLite busy·pool timeout을 확인합니다. controller 시험은 없는 예약의 `ReservationErrors::NotFound`가 기존
+404 `RESERVATION_NOT_FOUND`로 변환됨을 실제 route에서 확인합니다.
+
+프로젝트 전용 Ruby 4.0.6와 Bundler 4.0.16을 `PATH`에만 적용해 README의 공식 명령을 실행했습니다.
+
+```sh
+bundle check
+bin/rails zeitwerk:check
+bin/rails test
+bin/rubocop
+```
+
+최종 결과는 dependency 충족, Zeitwerk `All is good!`, **44 runs·147 assertions·실패/오류/skip 0**,
+RuboCop **46 files·offense 0**입니다. 외부 DB 환경을 쓰지 않는 기존 test 설정과 격리 SQLite만 사용했고
+migration·dependency·Compose·멱등성·metrics는 변경하지 않았습니다.
 
 요청 시험은 이름 trim, 누락 `REQUIRED`, 공백 `TOO_SHORT`, `name[]=Marin`·`name[value]=Marin`의 `INVALID_TYPE`,
 80자 초과 거절, 고정 UTC clock, live, 실제 SQLite ready,

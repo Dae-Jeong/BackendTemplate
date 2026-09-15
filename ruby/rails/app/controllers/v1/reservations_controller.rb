@@ -18,7 +18,7 @@ class V1::ReservationsController < ApplicationController
     render json: { data: serialize(result) }, status: :created
   rescue ReservationService::InvalidInput => error
     render_invalid_input([ "body", "product_id" ], error.reason)
-  rescue ReservationService::ProductNotFound
+  rescue ReservationErrors::ProductNotFound
     render_problem(:not_found, "PRODUCT_NOT_FOUND")
   rescue ReservationService::SoldOut
     render_problem(:conflict, "SOLD_OUT")
@@ -34,7 +34,7 @@ class V1::ReservationsController < ApplicationController
     render json: { data: serialize(result) }
   rescue ReservationService::InvalidInput => error
     render_invalid_input([ "path", "reservation_id" ], error.reason)
-  rescue ReservationService::NotFound
+  rescue ReservationErrors::NotFound
     render json: {
       type: "about:blank",
       title: "Not Found",
