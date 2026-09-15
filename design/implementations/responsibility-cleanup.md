@@ -1,6 +1,6 @@
 # 책임 정리 상태
 
-Status: NestJS transaction runner 구현 · 다른 구현은 미구현 제안 · 2026-09-15
+Status: NestJS runner·worker 가독성 구현 · 다른 구현은 미구현 제안 · 2026-09-15
 
 이 문서는 현재 코드의 책임 검토 결과와 작게 나눈 후속 작업을 기록한다. 공통
 정책을 복제하지 않고 [개발 원칙](../engineering.md), [Backend](../backend.md),
@@ -73,6 +73,7 @@ ReplayRepository로 쪼개거나 generic transaction runner를 도입하는 것�
 | NE-2 transaction 오류/metrics | **구현**. runner가 outcome metric과 SQLite busy 번역을 소유하고 Service는 업무 callback을 전달 | callback 오류+rollback 성공만 `rolled_back`; commit/rollback failure는 `failed`; commit 성공+release 실패는 `committed`. 원래 오류 identity와 기존 오류 우선순위 유지 | [NestJS Task 10 검증](nestjs-verification.md#task-10-검증--2026-09-15) |
 | NE-3 replay 이름 명시 | **구현**. `findMatchingReplay(client, key, productId)`와 Service callsite로 변경 | key 없음/일치/mismatch를 method name과 repository가 드러냄. aggregate 저장·conflict policy 이동 없음 | [NestJS Task 10 검증](nestjs-verification.md#task-10-검증--2026-09-15) |
 | NE-4 seed/Client ownership | **구현 범위 유지**. `database/seed.ts`는 business outcome metric 밖의 maintenance transaction을 명시적으로 조립; `TransactionClient`는 database runner가 소유 | 별도 ProductRepository/adapter 없음. seed 반복 시 기존 stock 불변이고 business transaction metric baseline을 바꾸지 않음 | [NestJS Task 10 검증](nestjs-verification.md#task-10-검증--2026-09-15) |
+| NE-5 worker 연결 가독성 | **구현**. `Connection.settle`이 worker 응답 완료를 모으고 worker의 query method 실행은 명시적 분기로 정리 | `Primary`는 변경하지 않음. protocol·close/death·pending reject·transaction 상태·pool/metrics 의미 유지 | [NestJS Task 11 검증](nestjs-verification.md#task-11-검증--2026-09-15) |
 
 추가한 focused test는 callback rollback 원래 오류, acquire 실패의 release 없음,
 begin 또는 transaction boundary 실패의 release 시도, commit 성공 뒤 release 실패의 `committed`,
@@ -214,7 +215,7 @@ RA-1의 단일 규칙을 구현한다. RA-2/4는 유지, RA-3 helper 추출은 �
 동적 수락 조건(테스트/build)은 구현 후 별도 실행 기록으로 남기며, 아래 작업 순서에서는
 통과를 주장하지 않는다.
 
-Task 2의 NestJS 범위만 2026-09-15에 구현·검증했다. Task 1·3·4·5는 pending이며
+Task 2의 NestJS runner와 이어진 worker 가독성 범위만 2026-09-15에 구현·검증했다. Task 1·3·4·5는 pending이며
 각 구현 작업에서 검증·커밋을 나눈다. rename에 기존 검증으로 충분하면
 구현을 복제하는 새 테스트를 추가하지 않는다. FA-4와 추가 오류 케이스는 기존 검증의
 누락이 확인될 때만 보강하며 이름 변경에 기술 경계 재구현을 끼워 넣지 않는다.
@@ -222,5 +223,5 @@ Task 2의 NestJS 범위만 2026-09-15에 구현·검증했다. Task 1·3·4·5�
 모든 작업의 완료 조건은 (a) 제안한 파일·메서드와 callsite가 실제 코드와 일치,
 (b) 정상·실패·경합·재생에서 상태와 외부 호출 횟수가 기존과 동일,
 (c) 위 매핑 테스트와 새 누락 케이스의 실행 결과를 별도로 기록하는 것이다.
-NestJS 실행 결과는 [NestJS 검증 기록](nestjs-verification.md#task-10-검증--2026-09-15)이 소유한다.
+NestJS 실행 결과는 [NestJS 검증 기록](nestjs-verification.md#task-11-검증--2026-09-15)이 소유한다.
 다른 구현의 애플리케이션 테스트와 build는 이 변경에서 실행하지 않았다.

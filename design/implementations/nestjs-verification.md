@@ -1,6 +1,6 @@
 # NestJS 검증 계획
 
-Status: 네이티브·SQLite·복구 자동 시험 및 transaction runner 검증 기록 · 2026-09-15
+Status: 네이티브·SQLite·복구 자동 시험 및 DB worker 가독성 검증 기록 · 2026-09-15
 
 이 문서는 [구현 설계](nestjs.md)의 통과 조건과 이후 실행 증거를 소유합니다.
 FastAPI의 시험 통과를 NestJS의 검증 결과로 대신하지 않습니다.
@@ -202,6 +202,27 @@ DB-disabled 앱에는 `TransactionRunner`도 등록되지 않는 것을 lifecycl
 seed는 운영 요청의 business transaction outcome이 아닌 maintenance transaction이므로 기존 명시적 경계를 복원했고,
 runner 적용 범위를 `ReservationsService` 업무 실행으로 좁혀 metric 의미와 기존 baseline을 보존했습니다.
 실행 중인 서비스·컨테이너·공유 수집기, 다른 언어 구현, Prisma와 migration은 변경하거나 재검증하지 않았습니다.
+
+## Task 11 검증 — 2026-09-15
+
+`Connection`의 worker 응답 완료와 `sqlite.worker`의 query method 분기만 정리했습니다.
+`Primary`는 검토 결과 pool 획득·timeout 번역·metrics·dirty cleanup·shutdown 책임이 이미 분명하여
+변경하지 않았습니다. worker message shape과 close/death 처리, pending reject 순서와
+`inTransaction` 갱신 시점은 유지했습니다.
+
+`ts/nestjs/`에서 수행한 결과입니다.
+
+| 명령 | 결과 |
+| --- | --- |
+| `node scripts/toolchain.mjs build` | 통과 |
+| `node scripts/toolchain.mjs typecheck` | 통과 |
+| `node scripts/toolchain.mjs lint` | 통과 |
+| `node scripts/toolchain.mjs test` | 7 files, 49 tests 통과 |
+| `node scripts/toolchain.mjs test:e2e` | 2 files, 15 tests 통과 |
+
+기존 실제 SQLite 시험의 COMMIT·rollback 실패, dirty worker 폐기, worker 강제 종료와 원자성,
+독립 프로세스 경합·복구를 다시 통과했습니다. 새 framework·RPC·ORM 변경이나 실행 중인
+서비스·컨테이너 변경은 없었습니다.
 
 ## 미검증 범위
 

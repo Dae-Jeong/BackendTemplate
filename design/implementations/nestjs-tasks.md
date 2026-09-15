@@ -1,6 +1,6 @@
 # NestJS 작업 계획
 
-Status: Task 1–10 구현·검증 완료 · Nest transaction runner 책임 분리 · 2026-09-15
+Status: Task 1–11 구현·검증 완료 · DB worker 연결 가독성 정리 · 2026-09-15
 
 목표는 작은 실행 앱에서 시작해 예약의 동시성·멱등성까지 한 사이클을 검증하는 것입니다.
 승인된 구현에 따라 Nest 앱과 로컬 파일 SQLite 예제를 만들었습니다. 공유 운영 인프라·계정·수집기는 변경하지 않았습니다.
@@ -18,6 +18,7 @@ Status: Task 1–10 구현·검증 완료 · Nest transaction runner 책임 분�
 | Task 8 | 새 디렉터리 locked 설치·빌드·migration·예약, 컨테이너 재시작 재생·공유 대시보드·MkDocs 통합 |
 | Task 9 | 오류 분류·전송 분리, Controller의 명시적 공개 필드, 예약 업무 본문 추출; 기존 runtime 계약과 전체 시험 유지 |
 | Task 10 | injectable transaction runner가 lease·immediate transaction·outcome metric·busy 번역을 소유; Service 업무 흐름과 Primary pool cleanup 유지 |
+| Task 11 | worker 응답 정리와 SQL 실행 분기를 이름 있는 작은 경계로 정리; protocol·pool·transaction 의미 유지 |
 
 코드 checkpoint: `56cf0c7` 공식 생성물, `521e098` 설정·DI·수명,
 `5c3eb31` HTTP·관측·SQLite 예약·프로세스 복구 검증,
@@ -144,3 +145,12 @@ runner options·retry·replica·transaction interceptor·범용 UnitOfWork는 �
 seed maintenance transaction은 business outcome metric과 구분해 기존 명시적 경계를 유지했습니다.
 callback rollback, acquire/begin/commit-or-rollback/release 구분, commit 뒤 cleanup 실패, metrics 실패 격리를
 [검증 기록](nestjs-verification.md#task-10-검증--2026-09-15)으로 확인합니다.
+
+## Task 11. DB worker 연결 가독성
+
+`Connection`의 worker message callback은 `settle`에 pending 조회·삭제, transaction 상태 반영,
+성공·실패 완료를 모았습니다. `sqlite.worker`의 `run/get/all/values` 실행은 명시적 `switch`로
+구분했습니다. `Primary`는 pool·metrics·dirty cleanup 책임이 이미 읽히므로 변경하지 않았습니다.
+
+worker protocol, close와 worker death 처리, transaction 상태, runner·pool·metrics 의미는 바꾸지 않았고
+기존 build·typecheck·lint와 실제 SQLite·독립 프로세스·HTTP 전체 시험으로 확인했습니다.

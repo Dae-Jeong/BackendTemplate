@@ -13,6 +13,25 @@ const database = new Database(filename, {
 database.pragma('foreign_keys = ON');
 database.pragma('synchronous = FULL');
 const port = parentPort!;
+
+function execute(
+  sql: string,
+  params: unknown[],
+  method: Exclude<QueryRequest['method'], 'close'>,
+): unknown[] {
+  const statement = database.prepare(sql);
+  switch (method) {
+    case 'run':
+      statement.run(...params);
+      return [];
+    case 'get':
+      return (statement.raw().get(...params) as unknown[] | undefined) ?? [];
+    case 'all':
+    case 'values':
+      return statement.raw().all(...params);
+  }
+}
+
 port.on('message', (query: QueryRequest) => {
   if (query.method === 'close') {
     database.close();
@@ -25,13 +44,7 @@ port.on('message', (query: QueryRequest) => {
     return;
   }
   try {
-    const statement = database.prepare(query.sql);
-    let rows: unknown[] = [];
-    if (query.method === 'run') statement.run(...query.params);
-    else if (query.method === 'get')
-      rows =
-        (statement.raw().get(...query.params) as unknown[] | undefined) ?? [];
-    else rows = statement.raw().all(...query.params);
+    const rows = execute(query.sql, query.params, query.method);
     port.postMessage({
       id: query.id,
       rows,
