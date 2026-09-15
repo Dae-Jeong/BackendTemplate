@@ -1,9 +1,7 @@
 class Product < ApplicationRecord
-  PRODUCT_ID_MAX_LENGTH = 128
-
   validates :product_id,
             presence: true,
-            length: { maximum: PRODUCT_ID_MAX_LENGTH },
+            length: { maximum: ProductId::MAX_LENGTH },
             uniqueness: true
   validates :stock, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
 

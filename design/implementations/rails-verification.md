@@ -1,6 +1,6 @@
 # Rails 검증 기록
 
-Status: Task 1~4 자동 검사·migration·경합·네이티브 smoke 완료 · 2026-09-15
+Status: Task 1~4 및 ProductId 책임 정리 자동 검사 완료 · 2026-09-15
 
 ## 도구와 생성 명령
 
@@ -45,6 +45,20 @@ Ruby 4.0.6 환경에서 lockfile이 선택했던 `json 3.0.2`는 정상 JSON POS
 | invalid `APP_ENVIRONMENT`의 `bin/rails runner` | 시작 실패, 입력 원문 없이 고정 오류 확인 |
 | `.env.example` 복사 후 POSIX shell source | 공백 포함 `APP_NAME`과 `SERVER_PORT`를 오류 없이 로드 |
 | `uv tool run --from uv==0.12.10 uv run --project docs --locked mkdocs build --strict` | build 성공, 누락 link/nav 경고 0 |
+
+## ProductId 책임 정리 검증
+
+새 `ProductIdTest` 5 runs는 trim 반환, 정확히 128자 허용과 nil·비문자열·공백·129자의
+`REQUIRED`·`INVALID_TYPE`·`TOO_SHORT`·`TOO_LONG` reason을 확인합니다. 영향 범위의 model·Service·HTTP
+시험은 28 runs, 86 assertions가 통과했고 전체는 44 runs, 147 assertions, 실패·오류·skip 0입니다.
+
+`Product`와 `Reservation`은 `ProductId::MAX_LENGTH`를 공유하지만 model 저장값을 자동 trim하지 않습니다.
+HTTP 예약은 Service가 정규화 오류만 기존 `InvalidInput`으로 번역하고, CLI seed는 기존 model 경계를 유지합니다.
+기존 Service 대역은 더 이상 `Reservation`의 product ID 상수를 복제하지 않습니다. 전체 시험으로 실제 SQLite
+commit/rollback·busy, stock 차감과 독립 process 경합을 재검증했습니다.
+
+프로젝트 전용 Ruby 4.0.6에서 bundle check, Zeitwerk, 전체 test, RuboCop 44 files와
+Brakeman error/security warning 0을 확인했습니다. migration·callback·dependency 변경은 없습니다.
 
 요청 시험은 이름 trim, 누락 `REQUIRED`, 공백 `TOO_SHORT`, `name[]=Marin`·`name[value]=Marin`의 `INVALID_TYPE`,
 80자 초과 거절, 고정 UTC clock, live, 실제 SQLite ready,

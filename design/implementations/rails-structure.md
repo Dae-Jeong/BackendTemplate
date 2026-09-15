@@ -1,6 +1,6 @@
 # Rails 폴더 구조와 책임
 
-Status: Task 1~4 실제 구조 · 2026-09-15
+Status: Task 1~4 및 ProductId 책임 정리 실제 구조 · 2026-09-15
 
 `ruby/rails/`는 Rails generator의 관용적 역할별 경로를 유지합니다.
 
@@ -11,6 +11,7 @@ app/
   controllers/v1/greetings_controller.rb
   controllers/v1/reservations_controller.rb
   models/application_record.rb
+  models/product_id.rb
   models/greeting.rb
   models/product.rb
   models/reservation.rb
@@ -35,6 +36,7 @@ test/
   models/database_configuration_test.rb
   models/migration_compatibility_test.rb
   models/product_test.rb
+  models/product_id_test.rb
   models/reservation_test.rb
   models/runtime_settings_test.rb
   services/reservation_service_test.rb
@@ -49,10 +51,11 @@ test/
 | `models/greeting.rb` | HTTP와 ORM에서 분리된 인사 결과 값 |
 | `models/application_record.rb` | Active Record 모델의 Rails 표준 상위 클래스 |
 | `models/product.rb` | 상품 조회·조건부 재고 UPDATE·반복 안전 seed와 field 제약 |
+| `models/product_id.rb` | product ID trim·길이 규칙과 입력 오류 reason을 가진 순수 모듈 |
 | `models/reservation.rb` | `reservations` table 매핑, field 제약, `ReservationResult` 변환 |
 | `models/reservation_result.rb` | HTTP·Active Record에서 분리된 예약 결과 값 |
 | `services/greeting_service.rb` | 이름 정규화·제약과 주입받은 clock으로 결과 생성 |
-| `services/reservation_service.rb` | 조건부 재고 차감과 예약 INSERT의 transaction, 업무 오류·DB timeout 구분, commit 뒤 결과 생성, ID 조회 |
+| `services/reservation_service.rb` | ProductId 오류의 공개 업무 오류 번역, 조건부 재고 차감과 예약 INSERT transaction, DB timeout 구분, commit 뒤 결과 생성, ID 조회 |
 | `config/application.rb` | runtime settings, UTC clock, readiness callable 조립 |
 | `config/runtime_settings.rb` | env 파싱과 안전한 시작 검증 |
 | `config/database.yml` | 환경별 SQLite 파일·pool·busy timeout, test의 외부 DB env 차단 |

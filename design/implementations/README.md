@@ -5,7 +5,7 @@
 [Runtime Review](../runtime-review.md)를 참조합니다.
 
 [예약 코드 책임 정리](responsibility-cleanup.md)는 기존 개발·검증 규칙에 대한 검토와 구현별 상태를 담습니다.
-NestJS transaction runner 범위는 구현했으며 FastAPI·Spring Boot·Rails 항목은 미구현 제안입니다.
+승인된 NestJS·FastAPI·Spring Boot·Rails 책임 정리 항목은 구현별 검증 기록과 함께 완료했습니다.
 
 ## 현재 제공 범위
 

@@ -26,7 +26,7 @@ class ReservationService
   end
 
   def self.create(product_id:, clock:)
-    normalized_product_id = normalize_product_id(product_id)
+    normalized_product_id = ProductId.normalize(product_id)
     timestamp = clock.call.utc
     reservation = nil
 
@@ -47,6 +47,8 @@ class ReservationService
     end
 
     reservation.to_result
+  rescue ProductId::Invalid => error
+    raise InvalidInput, error.reason
   rescue ActiveRecord::ConnectionTimeoutError => error
     raise DatabasePoolTimeout, cause: error
   rescue ActiveRecord::StatementInvalid => error
@@ -64,19 +66,6 @@ class ReservationService
     reservation.to_result
   end
 
-  def self.normalize_product_id(product_id)
-    raise InvalidInput, "REQUIRED" if product_id.nil?
-    raise InvalidInput, "INVALID_TYPE" unless product_id.is_a?(String)
-
-    normalized_product_id = product_id.strip
-    raise InvalidInput, "TOO_SHORT" if normalized_product_id.empty?
-    if normalized_product_id.length > Reservation::PRODUCT_ID_MAX_LENGTH
-      raise InvalidInput, "TOO_LONG"
-    end
-
-    normalized_product_id
-  end
-
   def self.sqlite_busy?(error)
     cause = error
     while cause
@@ -86,5 +75,5 @@ class ReservationService
     end
     false
   end
-  private_class_method :normalize_product_id, :sqlite_busy?
+  private_class_method :sqlite_busy?
 end

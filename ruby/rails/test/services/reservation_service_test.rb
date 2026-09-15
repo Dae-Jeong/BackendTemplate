@@ -48,7 +48,6 @@ class ReservationServiceTest < ActiveSupport::TestCase
     end
     real_reservation = Reservation
     controlled_reservation = Class.new do
-      const_set(:PRODUCT_ID_MAX_LENGTH, real_reservation::PRODUCT_ID_MAX_LENGTH)
       define_singleton_method(:transaction) { |&block| real_reservation.transaction(&block) }
       define_singleton_method(:create!) do |**attributes|
         real_reservation.insert_all!([ attributes ])
@@ -73,7 +72,6 @@ class ReservationServiceTest < ActiveSupport::TestCase
   test "rolls back reservation and stock when an exception follows the insert" do
     real_reservation = Reservation
     controlled_reservation = Class.new do
-      const_set(:PRODUCT_ID_MAX_LENGTH, real_reservation::PRODUCT_ID_MAX_LENGTH)
       define_singleton_method(:transaction) { |&block| real_reservation.transaction(&block) }
       define_singleton_method(:create!) do |**attributes|
         real_reservation.create!(**attributes)
@@ -139,7 +137,6 @@ class ReservationServiceTest < ActiveSupport::TestCase
     real_reservation = Reservation
     pool_error = ActiveRecord::ConnectionTimeoutError.new
     controlled_reservation = Class.new do
-      const_set(:PRODUCT_ID_MAX_LENGTH, real_reservation::PRODUCT_ID_MAX_LENGTH)
       define_singleton_method(:transaction) { raise pool_error }
     end
 

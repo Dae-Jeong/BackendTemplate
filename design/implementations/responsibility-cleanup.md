@@ -1,12 +1,12 @@
 # 책임 정리 상태
 
-Status: NestJS runner·worker 가독성 구현 · 다른 구현은 미구현 제안 · 2026-09-15
+Status: 승인된 구현별 책임 정리 완료 · 2026-09-15
 
 이 문서는 현재 코드의 책임 검토 결과와 작게 나눈 후속 작업을 기록한다. 공통
 정책을 복제하지 않고 [개발 원칙](../engineering.md), [Backend](../backend.md),
 [관측](../observability.md), 각 구현 설계·검증 문서를 기준으로 삼는다. 아래의
-테스트 매핑은 실제 파일을 가리킨다. NestJS의 승인된 transaction runner 범위만 구현했으며,
-FastAPI·Spring Boot·Rails 항목은 여전히 제안이고 구현·계약 승인·성능 통과를 뜻하지 않는다.
+테스트 매핑은 실제 파일을 가리킨다. 승인된 구현 항목과 검증 상태를 기록하며,
+미실측 성능이나 별도 후속 기능의 완료를 뜻하지 않는다.
 
 ## 판정 요약
 
@@ -120,7 +120,7 @@ Rails idempotency 구현은 이 문서 범위가 아니다.
 
 | 작은 작업 | 책임·파일/시그니처 | callsite 변화와 보존할 동작 | 검증 매핑 |
 | --- | --- | --- | --- |
-| RA-1 ProductId 순수 규칙 소유 | 새 `app/models/product_id.rb`의 `ProductId::MAX_LENGTH = 128`과 `ProductId.normalize(value)`가 Rails canonical rule/error를 소유; Service는 그 예외를 기존 `InvalidInput` reason으로 매핑 | Product/Reservation 중복 constant 제거 여부를 검증하되 model/request/CLI 차이를 합치지 않음. `normalize(value, maximum:)`처럼 호출자별 규칙을 받는 API는 만들지 않음 | [product_test.rb](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/ruby/rails/test/models/product_test.rb), [reservation_service_test.rb](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/ruby/rails/test/services/reservation_service_test.rb), [reservations_controller_test.rb](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/ruby/rails/test/controllers/v1/reservations_controller_test.rb) — **미실행** |
+| RA-1 ProductId 순수 규칙 소유 | **구현**. `ProductId::MAX_LENGTH = 128`과 `ProductId.normalize(value)`가 canonical rule/error를 소유; Service는 그 예외만 기존 `InvalidInput` reason으로 매핑 | Product/Reservation이 상수를 공유하고 model/request/CLI 차이 유지. 호출자별 규칙 API·자동 strip callback 없음 | [Rails ProductId 검증](rails-verification.md#productid-책임-정리-검증) |
 | RA-2 decrement 의미 고정 | `Product.decrement_stock(product_id:, timestamp:)`의 affected-row count가 reserve 가능 여부를 뜻함 | zero면 `exists_by_product_id?`로 ProductNotFound/SoldOut 구분; update_all의 atomic conditional update와 timestamp 유지. 반환 semantics를 boolean/exception으로 바꾸지 않음 | [reservation_service_test.rb](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/ruby/rails/test/services/reservation_service_test.rb), [reservation_concurrency_test.rb](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/ruby/rails/test/services/reservation_concurrency_test.rb) — **미실행** |
 | RA-3 SQLite busy owner 보류 | 현재 코드 수정 없음. `ReservationService.create`의 `sqlite_busy?` rescue와 별도 pool timeout을 유지 | 기술 오류 검출 helper 분리/변경은 실제 중복 또는 테스트 필요가 확인될 때 별도 task로 승인. model로 내리지 않음 | [reservation_service_test.rb](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/ruby/rails/test/services/reservation_service_test.rb) real SQLite lock, pool timeout — **미실행** |
 | RA-4 transaction/seed 경계 문서화 | `ReservationService.create`가 decrement+Reservation.create! 한 transaction, `Product.seed_unless_exists!`가 seed owner | seed 반복은 existing stock을 reset하지 않음. Rails idempotency/metrics는 별도 작업 | [product_test.rb](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/ruby/rails/test/models/product_test.rb), [reservation_service_test.rb](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/ruby/rails/test/services/reservation_service_test.rb) — **미실행** |
@@ -200,7 +200,7 @@ SP-2를 구현하여 seed를 제품 소유 흐름으로 분리한다. SP-4는 �
 - `ReservationAttempts`가 proxy rollback 후 fresh replay read를 계속 담당함
 - seed가 reservation service transaction API에 의존하지 않음
 
-### Task 5. Rails ProductId 규칙 통합
+### Task 5. Rails ProductId 규칙 통합 — 구현 완료
 
 목표:
 RA-1의 단일 규칙을 구현한다. RA-2/4는 유지, RA-3 helper 추출은 보류한다.
@@ -215,13 +215,11 @@ RA-1의 단일 규칙을 구현한다. RA-2/4는 유지, RA-3 helper 추출은 �
 동적 수락 조건(테스트/build)은 구현 후 별도 실행 기록으로 남기며, 아래 작업 순서에서는
 통과를 주장하지 않는다.
 
-Task 1~4와 NestJS worker 가독성 범위를 2026-09-15에 구현·검증했다. Task 5는 pending이며
-각 구현 작업에서 검증·커밋을 나눈다. rename에 기존 검증으로 충분하면
-구현을 복제하는 새 테스트를 추가하지 않는다. FA-4와 추가 오류 케이스는 기존 검증의
-누락이 확인될 때만 보강하며 이름 변경에 기술 경계 재구현을 끼워 넣지 않는다.
+Task 1~5와 NestJS worker 가독성 범위를 2026-09-15에 구현·검증했다. rename에는 기존 검증을
+재사용했고 ProductId의 새 순수 규칙만 의미 있는 단위시험을 추가했다. FA-4와 추가 오류 케이스는
+이번 범위에서 누락이 확인되지 않아 보강하지 않았으며 기술 경계를 재구현하지 않았다.
 
 모든 작업의 완료 조건은 (a) 제안한 파일·메서드와 callsite가 실제 코드와 일치,
 (b) 정상·실패·경합·재생에서 상태와 외부 호출 횟수가 기존과 동일,
 (c) 위 매핑 테스트와 새 누락 케이스의 실행 결과를 별도로 기록하는 것이다.
-NestJS 실행 결과는 [NestJS 검증 기록](nestjs-verification.md#task-11-검증--2026-09-15)이 소유한다.
-다른 구현의 애플리케이션 테스트와 build는 이 변경에서 실행하지 않았다.
+각 실행 결과는 FastAPI·NestJS·Spring Boot·Rails의 구현별 검증 기록이 소유한다.

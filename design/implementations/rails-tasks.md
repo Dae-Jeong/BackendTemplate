@@ -1,6 +1,6 @@
 # Rails 단계별 Task
 
-Status: Task 1~4 완료 · 2026-09-15
+Status: Task 1~4 및 ProductId 책임 정리 완료 · 2026-09-15
 
 ## Task 1. 실행 방식과 저장 경계
 
@@ -43,3 +43,13 @@ Status: Task 1~4 완료 · 2026-09-15
 
 Task 5는 멱등 key 저장·동일 요청 결과 재생을 이번에 확인한 원자적 재고 흐름에 붙이는 단계입니다. 인증, metrics, 전체 Problem handler,
 Compose는 각자의 작은 Task로 유지합니다.
+
+## ProductId 책임 정리
+
+- [x] 순수 `ProductId.normalize(value)`가 String trim과 128자 상한, 네 입력 오류 reason을 소유
+- [x] ReservationService는 `ProductId::Invalid`만 기존 `InvalidInput`으로 번역
+- [x] Product와 Reservation validation이 `ProductId::MAX_LENGTH`를 공유하고 자동 strip callback은 추가하지 않음
+- [x] migration은 유지하고 model·Service·HTTP·CLI 입력 경계 차이를 보존
+- [x] 새 규칙 단위시험과 전체 SQLite stock·rollback·경합·HTTP 회귀 검증
+
+이 책임 정리는 위의 예약 멱등성 Task 5를 구현한 것이 아닙니다.
