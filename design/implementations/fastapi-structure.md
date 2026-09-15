@@ -1,6 +1,6 @@
 # FastAPI 폴더 구조와 활용 기준
 
-Status: 역할별 배치·예약 저장 적용 · 2026-09-08
+Status: 역할별 배치·예약 저장·순수 업무 validation 적용 · 2026-09-16
 
 이 문서는 FastAPI 구현의 폴더·파일 역할과 배치 선택을 소유합니다.
 공통 책임 계약은 [Backend](../backend.md), 개발 판단은 [개발 원칙](../engineering.md),
@@ -32,6 +32,7 @@ flowchart TD
     SRC --> BOOT["bootstrap/ · app.py · contracts.py · lifespan.py"]
     SRC --> ROUTERS["routers/ · index.py · greetings.py · reservations.py · health.py · metrics.py"]
     SRC --> SERVICES["services/ · greetings.py · reservations.py"]
+    SRC --> VALIDATION["validation/ · reservations.py"]
     SRC --> REPOS["repositories/ · reservations.py"]
     SRC --> MODELS["models/ · reservations.py"]
     SRC --> SCHEMAS["schemas/ · greetings.py · reservations.py · responses.py"]
@@ -66,8 +67,9 @@ flowchart TD
 | `core/contracts.py` | Clock·관측 결과·로그 문맥 등 공통 기반 계약입니다. |
 | `core/logging.py`, `core/metrics.py` | JSON 로그 출력과 Prometheus registry·지표 기록입니다. |
 | `routers/reservations.py`, `schemas/reservations.py` | 예약 HTTP 입력 검증·typed 응답 변환·멱등 헤더와 `Reservation` snapshot의 Pydantic adapter를 소유합니다. |
-| `services/reservations.py` | `@transactional` 업무 순서와 재생·업무 실패 분류를 소유합니다. 기술 transaction 처리는 소유하지 않습니다. |
+| `services/reservations.py` | `@transactional`에서 조회·순수 validation·변경 순서를 조율합니다. 조건부 감소가 실제 실패한 뒤 존재를 검증하고 `SoldOut`을 결정하며, 기술 transaction 처리는 소유하지 않습니다. |
 | `repositories/reservations.py` | 조건부 차감·예약/키 저장·결과 조회 SQL과 저장 JSON의 runtime validation·native JSON 직렬화 경계입니다. commit하지 않습니다. |
+| `validation/reservations.py` | DB 호출 없이 typed replay/product를 받아 멱등 입력 충돌과 상품 존재 조건을 검사합니다. |
 | `models/reservations.py` | Core Table·DB 제약·metadata입니다. 외부 요청 schema와 구분합니다. |
 | `contracts/reservations.py` | 불변 업무 결과 타입입니다. HTTP·저장 구현을 import하지 않습니다. |
 | `exceptions/reservations.py`, `exceptions/database.py`, `http/database.py` | 업무/DB 실패 타입과 HTTP 503 변환을 구분합니다. |
@@ -91,15 +93,21 @@ flowchart LR
     SERVICE --> CLOCK["core/contracts.py · Clock"]
     DEP --> CLOCK
     BOOT["bootstrap/app.py"] --> ROUTER
+    RESERVE["services/reservations.py"] --> VALIDATION["validation/reservations.py"]
+    RESERVE --> REPOSITORY["repositories/reservations.py"]
+    VALIDATION --> RESERVATION_CONTRACT["contracts/reservations.py"]
 ```
 
 화살표는 import 방향입니다. service는 router·Depends·외부 응답 스키마를 import하지 않습니다.
 계약은 구현을 역으로 import하지 않으며 package `__init__.py`에서 구현을 재노출하지 않습니다.
 
-예약 호출은 router → service → repository입니다. Session·metrics·clock은 명시적 인자로 전달합니다.
+예약 호출은 router → service → repository이며, Service가 repository에서 받은 typed 결과를 순수 validation에 전달합니다.
+Session·metrics·clock은 명시적 인자로 전달하고 validation은 DB·transaction에 접근하지 않습니다.
 DB Table은 `models/`, 외부 요청·응답 모델은 `schemas/`, 내부 업무 타입은 `contracts/`에 둡니다.
 같은 필드를 가진다는 이유만으로 모든 타입과 변환 함수를 미리 만들지는 않습니다.
-멱등 결과 JSON은 기존 불변 `Reservation`을 `TypeAdapter`로 검증해 반환하며 Repository 밖에서는 raw key를 읽지 않습니다.
+멱등 결과 JSON은 기존 불변 `Reservation`을 `TypeAdapter`로 검증하고 authoritative 저장 `product_id`와 함께
+`ReplayRecord`로 반환합니다. Service와 validation은 raw JSON key를 읽지 않으며 멱등 충돌은 snapshot 내부 값이 아니라
+저장 행의 `product_id`를 요청과 비교합니다.
 새 snapshot은 Pydantic JSON mode의 UTC `Z`를 저장하고 기존 `+00:00` ISO snapshot도 읽어 같은 HTTP body로 재생합니다.
 누락·잘못된 field type·datetime은 저장 경계에서 거절되어 500이 되고 해당 요청의 새 효과는 남지 않습니다.
 설정·의존성·자원 수명은 기존 명시적 DI 계약을 유지합니다.

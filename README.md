@@ -72,6 +72,7 @@ flowchart LR
     DI["앱 조립 · 의존성 주입"] -. 주입 .-> HTTP["Router / Controller<br/>입력 검증 · 응답 변환"]
     DI -. 주입 .-> SVC["Service<br/>업무 · 트랜잭션 경계"]
     HTTP --> SVC
+    SVC --> VALIDATION["validation<br/>순수 업무 조건"]
     SVC --> STORE["저장 경계<br/>Repository 또는 crud"]
     STORE --> DB[("Primary DB")]
     SVC -. 내부 결과 .-> CONTRACT["contracts<br/>HTTP·저장 구현과 분리"]
@@ -82,6 +83,7 @@ flowchart LR
 | --- | --- |
 | 명시적 DI | FastAPI는 `Depends` provider와 함수 인자, Nest·Spring은 생성자 주입으로 연결합니다. |
 | 계약 분리 | 외부 schema/DTO, 내부 contract, DB 모델을 구분하고 업무가 HTTP 표현에 의존하지 않게 합니다. |
+| 업무 검증 | 입력 형식은 schema/DTO·controller, 조회가 끝난 순수 업무 조건은 validation, 조회·변경 순서와 트랜잭션은 Service가 소유합니다. |
 | 업무 트랜잭션 | Service 경계에서 같은 연결로 처리하고 commit 성공 뒤 응답합니다. Repository나 `crud` helper는 commit하지 않습니다. |
 | 동시성·멱등성 | 예약 예제에서 DB unique 제약·조건부 재고 차감·저장한 결과 재생으로 중복과 초과 예약을 제어합니다. |
 | 응답·오류 | 성공은 `data`, 오류는 Problem Details 형식입니다. health·metrics는 각 전용 형식을 유지합니다. |

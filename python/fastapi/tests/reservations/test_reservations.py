@@ -268,6 +268,24 @@ def test_replay_and_conflicting_input(client: TestClient, database_url: str) -> 
     assert database_state(database_url) == (0, 1, 1)
 
 
+def test_replay_conflict_uses_authoritative_stored_product_id(
+    client: TestClient, database_url: str
+) -> None:
+    assert (
+        client.post("/v1/reservations", json={"product_id": "demo"}).status_code == 201
+    )
+    with closing(sqlite3.connect(str(make_url(database_url).database))) as connection:
+        connection.execute(
+            "UPDATE idempotency_keys SET product_id = 'other' WHERE key = 'test-key'"
+        )
+        connection.commit()
+
+    conflict = client.post("/v1/reservations", json={"product_id": "demo"})
+    assert conflict.status_code == 409
+    assert conflict.json()["code"] == "IDEMPOTENCY_CONFLICT"
+    assert database_state(database_url) == (0, 1, 1)
+
+
 def test_snapshot_uses_native_json_and_reads_legacy_datetime(
     client: TestClient, database_url: str
 ) -> None:

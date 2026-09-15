@@ -12,6 +12,7 @@ from template_api.core.metrics import create_metrics
 from template_api.core.settings import Settings
 from template_api.repositories.reservations import seed_product
 from template_api.schemas.reservations import ReserveRequest
+from template_api.validation.reservations import validate_product_exists
 
 
 async def seed(product_id: str, stock: int) -> None:
@@ -27,7 +28,9 @@ async def seed(product_id: str, stock: int) -> None:
             primary_session(async_sessionmaker(engine), metrics) as session,
             session.begin(),
         ):
-            product = await seed_product(session, product_id, stock)
+            product = validate_product_exists(
+                await seed_product(session, product_id, stock)
+            )
         print(
             json.dumps(
                 {"product_id": product.product_id, "available": product.available}

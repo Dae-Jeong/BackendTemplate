@@ -7,11 +7,17 @@ from template_api.contracts.reservations import Reservation, ReservationResult
 from template_api.core.contracts import Clock
 from template_api.core.database_metrics import DatabaseMetrics
 from template_api.core.transactions import transactional
+from template_api.exceptions.reservations import SoldOut
 from template_api.repositories.reservations import (
-    decrease_stock,
-    find_matching_replay,
+    decrease_stock_if_available,
+    find_product,
+    find_replay,
     save_idempotency,
     save_reservation,
+)
+from template_api.validation.reservations import (
+    validate_product_exists,
+    validate_replay_product,
 )
 
 
@@ -24,10 +30,14 @@ async def reserve(
     key: str,
     clock: Clock,
 ) -> ReservationResult:
-    existing = await find_matching_replay(session, key, product_id)
+    existing = await find_replay(session, key)
     if existing is not None:
-        return ReservationResult(reservation=existing, replayed=True)
-    await decrease_stock(session, product_id)
+        return ReservationResult(
+            reservation=validate_replay_product(product_id, existing), replayed=True
+        )
+    if not await decrease_stock_if_available(session, product_id):
+        validate_product_exists(await find_product(session, product_id))
+        raise SoldOut()
     reservation = Reservation(
         reservation_id=uuid4().hex,
         product_id=product_id,

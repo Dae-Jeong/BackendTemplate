@@ -1,17 +1,29 @@
 # 책임 정리 상태
 
-Status: 승인된 구현별 책임 정리 완료 · 2026-09-15
+Status: 2026-09-15 평가 기록 · Python replay 책임 선택은 2026-09-16 validation 분리로 대체
 
-후속 [트랜잭션 실행 책임](transaction-boundaries.md)은 FA-1 유지 판정을 Python 구현 결과로 대체했습니다.
-NestJS·Rails 후속은 아직 제안이며 아래 내용에는 이전 완료 기록도 포함됩니다.
+2026-09-15 기록에서 후속 [트랜잭션 실행 책임](transaction-boundaries.md)은 FA-1 유지 판정을 Python 구현 결과로 대체했고,
+NestJS·Rails 후속은 당시 아직 제안이었습니다. 아래 내용에는 그 시점의 완료 기록도 포함됩니다.
 
-이 문서는 현재 코드의 책임 검토 결과와 작게 나눈 후속 작업을 기록한다. 공통
+이 문서의 아래 평가·Task 1~5 결과는 **2026-09-15 당시의 역사적 기록**입니다. 특히 FastAPI/NestJS/Spring의
+`findMatchingReplay` 계열에 conflict 판정을 남긴 선택은 현재 전체 구현의 기준으로 읽지 않습니다.
+Python 두 앱의 현재 선택은 [개발 원칙](../engineering.md#application과-입력-경계),
+[FastAPI 구조](fastapi-structure.md#호출과-계약의-방향), [FastCRUD 설계](fastapi-fastcrud.md#런타임과-transaction-소유권)가 소유합니다.
+
+## 현재 Python validation 책임 — 2026-09-16
+
+FastAPI 기준선과 FastCRUD 변형은 각각 독립 `validation/reservations.py`를 둡니다. 저장 경계는 typed replay/product와
+원자적 조건부 감소의 boolean 같은 DB 사실을 반환하고, validation은 DB 접근 없이 replay product 충돌과 product 존재를
+검사합니다. Service는 조회·validation·변경·transaction을 조율하고 실제 조건부 감소가 실패한 뒤 존재를 확인해
+`SoldOut`을 결정합니다. DB constraint·lock·claim 같은 기술 신호와 그 번역은 계속 infrastructure 경계의 책임입니다.
+
+## 2026-09-15 당시 판정 요약 (대체됨)
+
+이 문서는 당시 코드의 책임 검토 결과와 작게 나눈 후속 작업을 기록한다. 공통
 정책을 복제하지 않고 [개발 원칙](../engineering.md), [Backend](../backend.md),
 [관측](../observability.md), 각 구현 설계·검증 문서를 기준으로 삼는다. 아래의
 테스트 매핑은 실제 파일을 가리킨다. 승인된 구현 항목과 검증 상태를 기록하며,
 미실측 성능이나 별도 후속 기능의 완료를 뜻하지 않는다.
-
-## 판정 요약
 
 현재 구조는 대부분 업무 의미 repository와 Service의 업무 트랜잭션 경계를 이미 지킨다.
 공통 UnitOfWork나 네 구현 공용 runner는 만들지 않는다. 다만 NestJS는 승인된 범위에서

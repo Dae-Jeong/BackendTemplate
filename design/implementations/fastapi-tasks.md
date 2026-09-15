@@ -1,6 +1,6 @@
 # FastAPI 단계별 구현 task
 
-Status: Task 1~8 SQLite 구현 및 typed replay snapshot 경계 완료 · PostgreSQL 전환은 후속 · 2026-09-16
+Status: Task 1~8 SQLite 구현 및 typed replay·업무 validation 경계 완료 · PostgreSQL 전환은 후속 · 2026-09-16
 
 마무리 보완: 사용자 승인으로 로컬 컨테이너의 migration 성공 → API 시작 순서를 연결했습니다.
 새 DB·재시작 보존·DB 미사용·migration 실패 시 시작 차단·SIGTERM 종료의
@@ -345,6 +345,24 @@ transaction decorator를 유지한 채 raw key 조립·접근을 typed 변환으
 실행 결과: 실제 임시 SQLite API에서 새 `Z` snapshot 저장, raw legacy `+00:00` snapshot의 exact HTTP replay,
 손상 snapshot 6종의 500·재고/예약/키 불변을 확인했습니다. 예약 시험 26개와 전체 pytest 108개,
 Ruff check/format, ty, `uv build`가 통과했으며 기존 Starlette 경고 1개는 그대로 표시됩니다.
+
+### Task 8-5. 예약 업무 validation 책임 분리
+
+Status: 완료 · 2026-09-16.
+
+목표:
+저장 계층은 typed 저장 사실과 단일 조건부 SQL 결과만 반환하고, replay 충돌·상품 존재 업무 조건은
+순수 validation으로 분리하며 Service가 조회·검증·변경·transaction 순서를 조율합니다.
+
+예상 결과:
+- `find_replay`는 저장 행의 authoritative `product_id`와 runtime 검증된 `Reservation`을 `ReplayRecord`로 반환합니다.
+- `find_product`는 `Product | None`, `decrease_stock_if_available`은 같은 단일 조건부 SQL의 `bool`을 반환합니다.
+- validation은 DB 호출·쓰기·transaction 없이 replay 충돌과 상품 존재만 판정하고, 실제 감소 실패 뒤 `SoldOut`은 Service가 결정합니다.
+- seed의 기존 stock 보존·유효하지 않은 product 거절과 예약의 HTTP·snapshot·clock·metrics·rollback·경합 계약이 유지됩니다.
+
+실행 결과: 예약 집중 시험 27개와 전체 pytest 109개, Ruff check/format, ty, `uv build`가 통과했습니다.
+authoritative 저장 `product_id` 불일치 시 409와 상태 불변도 API에서 확인했습니다. 상세는
+[validation 책임 검증](fastapi-verification.md#validation-책임-검증--2026-09-16)에 기록했습니다.
 
 ### Task 10. transactional decorator 경계
 

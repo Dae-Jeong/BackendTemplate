@@ -30,13 +30,15 @@ Status: 개발 기준 정본 · 2026-09-07. 문서 기준이며 자동 검사의
 - 구조화 결과가 필요할 때 내부 타입을 사용하고 단순 값에 빈 DTO나 wrapper를 추가하지 않습니다.
 - 다른 도메인의 정보는 소유 도메인의 조회 계약을 통해 얻고 순환 업무 호출을 만들지 않습니다.
 - 여러 업무를 실제로 조합할 때만 Facade를 사용합니다. 단일 호출을 포장하거나 Facade를 중첩하지 않습니다.
-- 외부 조회를 필요로 하는 재사용 검증은 분리할 수 있지만 Validator가 상태 변경·트랜잭션을 소유하지 않습니다.
+- 입력 형식 검증은 schema/DTO·controller에 둡니다. 조회가 끝난 typed record나 boolean으로 판단할 수 있는 업무 조건은 순수 validation 함수로 분리하고, Service가 조회·validator 호출·변경 순서와 transaction을 조율합니다.
+- Validator는 DB를 조회하거나 상태를 변경하거나 transaction을 소유하지 않습니다. 원자적 조건부 변경의 실패처럼 실제 DB 결과 뒤에만 확정되는 `SoldOut` 판정은 Service가 저장 경계의 boolean을 받은 뒤 필요한 존재 조회와 validation을 거쳐 결정합니다.
 - 입력 경계는 형식·프로토콜 인증 문맥·응답을, 업무는 자원 권한·정책을 소유합니다. 합성 사용자를 운영 인증으로 설명하지 않습니다.
 - Job은 업무 흐름을 호출하며 직접 SQL·외부 호출·다른 Job 호출로 업무를 구성하지 않습니다. 중복·재시작·부분 실패 정책을 정의합니다.
 
 ## DB와 외부 연계가 추가될 때
 
 - Repository는 업무 의미의 조회·저장과 scope 조건을 소유하고 ORM을 경계 안에 유지합니다. 저장 입력도 명시적인 타입으로 전달합니다.
+- Repository·`crud`는 조회 결과·affected 여부 같은 저장 사실과 SQL을 소유합니다. DB 제약·잠금·claim 경합 등 기술 신호의 번역은 infrastructure 경계에 남기며, 이를 typed record를 소비하는 순수 업무 validation과 혼동하지 않습니다.
 - `python/fastapi-fastcrud/`는 model별 FastCRUD API 자체를 저장 경계로 사용하는 명시적 예외입니다. 이 변형만 Service가 typed storage schema로 FastCRUD를 직접 호출하고, `crud/`에는 model별 객체와 특수 SQL만 두며 forwarding Repository·`BaseCRUD`를 만들지 않습니다. 업무 정책과 transaction 경계는 계속 Service가 소유합니다.
 - schema 변경은 migration과 함께 다룹니다. enum·제약·인덱스·pagination 정렬을 실제 DB에서 검증합니다.
 - 한 세션을 동시 task에 공유하지 않습니다. 병렬 세션 사용으로 원자성이 달라지면 이를 명시합니다.

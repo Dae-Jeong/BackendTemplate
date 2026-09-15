@@ -16,6 +16,12 @@ class Product:
 
 
 @dataclass(frozen=True)
+class ReplayRecord:
+    product_id: str
+    reservation: Reservation
+
+
+@dataclass(frozen=True)
 class ReservationResult:
     reservation: Reservation
     replayed: bool

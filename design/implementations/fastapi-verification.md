@@ -1,6 +1,6 @@
 # FastAPI 검증 케이스
 
-Status: SQLite 1차 구현·transactional decorator·typed snapshot 자동 검증 완료 · 아래 실행 결과와 후속 명세 구분 · 2026-09-16
+Status: SQLite 1차 구현·transactional decorator·typed snapshot·업무 validation 자동 검증 완료 · 아래 실행 결과와 후속 명세 구분 · 2026-09-16
 
 [구현 설계](fastapi.md)의 상태와 경계를 검증합니다. 실행 결과 절은 실제 관측이며 이후 케이스 표는 검증 기준입니다.
 진행 상태는 [단계별 task](fastapi-tasks.md), 실행 명령은 [사용 안내](../../python/fastapi/README.md)가 소유합니다.
@@ -49,6 +49,23 @@ Repository의 `find_matching_replay(session, key, product_id)`와 Service callsi
 전체 95개 시험과 `uv build`, Ruff check/format, ty도 통과했습니다. 기존 Starlette
 `BlockingPortal` deprecation 경고 1개는 그대로 표시했습니다.
 이 replay 명명 작업 당시에는 새 테스트·transaction 경계·replay repository를 추가하지 않았습니다.
+
+## validation 책임 검증 — 2026-09-16
+
+Repository의 과거 `find_matching_replay`·`get_product`·`decrease_stock` 책임을 각각 typed 저장 사실을 반환하는
+`find_replay`·`find_product`·`decrease_stock_if_available`로 좁혔습니다. 순수 `validation/reservations.py`는
+`ReplayRecord`와 `Product | None`만 소비하고 DB 호출·쓰기·transaction 없이 `IdempotencyConflict`와
+`ProductNotFound`를 판정합니다. Service는 조건부 감소의 실제 실패 뒤 상품을 조회·검증한 다음 `SoldOut`을 발생시킵니다.
+
+authoritative idempotency 행의 `product_id`를 snapshot 내부 `product_id`와 다르게 만든 API 회귀 시험에서,
+요청과 snapshot이 같아도 409 `IDEMPOTENCY_CONFLICT`이고 재고·예약·키는 변하지 않음을 확인했습니다.
+기존 API 시험이 replay·not-found·sold-out·seed와 상태 불변을 이미 검증하므로 validator 구현을 그대로 반복하는
+별도 단위시험은 추가하지 않았습니다.
+
+- `pytest -q tests/reservations/test_reservations.py`: 27개 통과.
+- 전체 `pytest -q`: 109개 통과. 기존 Starlette `BlockingPortal` deprecation 경고 1개 표시 유지.
+- Ruff check/format, ty, `uv build`: 모두 lock 환경의 공식 명령으로 통과.
+- 모든 DB 시험은 pytest 임시 파일만 사용했으며 실행 중인 앱·사용자 DB는 변경하지 않았습니다.
 
 ## typed replay snapshot 경계 검증 — 2026-09-16
 
