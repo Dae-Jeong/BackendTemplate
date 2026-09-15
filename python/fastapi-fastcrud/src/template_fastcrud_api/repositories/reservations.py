@@ -24,11 +24,6 @@ from template_fastcrud_api.models.reservations import (
 )
 
 
-class ProductCreate(BaseModel):
-    id: str
-    available: int
-
-
 class ProductSelect(BaseModel):
     id: str
     available: int
@@ -40,14 +35,7 @@ class ReservationCreate(BaseModel):
     created_at: str
 
 
-class IdempotencyCreate(BaseModel):
-    key: str
-    product_id: str
-    reservation_id: str
-    response: dict[str, str]
-
-
-class IdempotencySelect(BaseModel):
+class IdempotencyRecord(BaseModel):
     key: str
     product_id: str
     reservation_id: str
@@ -57,19 +45,6 @@ class IdempotencySelect(BaseModel):
 product_crud = FastCRUD(ProductModel)
 reservation_crud = FastCRUD(ReservationModel)
 idempotency_crud = FastCRUD(IdempotencyKeyModel)
-
-
-async def create_product(
-    session: AsyncSession, product_id: str, stock: int
-) -> ProductRecord:
-    selected = await product_crud.create(
-        db=session,
-        object=ProductCreate(id=product_id, available=stock),
-        commit=False,
-        schema_to_select=ProductSelect,
-        return_as_model=True,
-    )
-    return ProductRecord(product_id=selected.id, available=selected.available)
 
 
 async def seed_product(
@@ -112,13 +87,29 @@ async def decrease_stock(session: AsyncSession, product_id: str) -> None:
         raise SoldOut()
 
 
-async def save_reservation(session: AsyncSession, reservation: Reservation) -> None:
+async def save_reservation_and_replay(
+    session: AsyncSession, key: str, reservation: Reservation
+) -> None:
     await reservation_crud.create(
         db=session,
         object=ReservationCreate(
             id=reservation.reservation_id,
             product_id=reservation.product_id,
             created_at=reservation.created_at.isoformat(),
+        ),
+        commit=False,
+    )
+    await idempotency_crud.create(
+        db=session,
+        object=IdempotencyRecord(
+            key=key,
+            product_id=reservation.product_id,
+            reservation_id=reservation.reservation_id,
+            response={
+                "reservation_id": reservation.reservation_id,
+                "product_id": reservation.product_id,
+                "created_at": reservation.created_at.isoformat(),
+            },
         ),
         commit=False,
     )
@@ -129,7 +120,7 @@ async def find_matching_replay(
 ) -> Reservation | None:
     selected = await idempotency_crud.get(
         db=session,
-        schema_to_select=IdempotencySelect,
+        schema_to_select=IdempotencyRecord,
         return_as_model=True,
         key=key,
     )
@@ -142,23 +133,4 @@ async def find_matching_replay(
         response["reservation_id"],
         response["product_id"],
         datetime.fromisoformat(response["created_at"]),
-    )
-
-
-async def save_idempotency(
-    session: AsyncSession, key: str, reservation: Reservation
-) -> None:
-    await idempotency_crud.create(
-        db=session,
-        object=IdempotencyCreate(
-            key=key,
-            product_id=reservation.product_id,
-            reservation_id=reservation.reservation_id,
-            response={
-                "reservation_id": reservation.reservation_id,
-                "product_id": reservation.product_id,
-                "created_at": reservation.created_at.isoformat(),
-            },
-        ),
-        commit=False,
     )

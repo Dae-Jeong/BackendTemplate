@@ -14,7 +14,7 @@ from typing import cast
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import insert, text
+from sqlalchemy import func, insert, select, text
 from sqlalchemy.engine import make_url
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -118,13 +118,13 @@ def test_save_failure_rolls_back_stock(
 ) -> None:
     import template_fastcrud_api.services.reservations as service
 
-    original = service.save_reservation
+    original = service.save_reservation_and_replay
 
-    async def fail(session, reservation):
-        await original(session, reservation)
+    async def fail(session, key, reservation):
+        await original(session, key, reservation)
         raise RuntimeError("synthetic-private-error")
 
-    monkeypatch.setattr(service, "save_reservation", fail)
+    monkeypatch.setattr(service, "save_reservation_and_replay", fail)
     response = client.post("/v1/reservations", json={"product_id": "demo"})
     assert response.status_code == 500
     assert "synthetic-private-error" not in response.text
@@ -138,7 +138,7 @@ def test_commit_failure_rolls_back_and_same_key_can_retry(
 ) -> None:
     import template_fastcrud_api.services.reservations as service
 
-    original = service.save_idempotency
+    original = service.save_reservation_and_replay
 
     async def invalid_deferred_fk(session, key, reservation):
         await original(session, key, reservation)
@@ -152,14 +152,14 @@ def test_commit_failure_rolls_back_and_same_key_can_retry(
             )
         )
 
-    monkeypatch.setattr(service, "save_idempotency", invalid_deferred_fk)
+    monkeypatch.setattr(service, "save_reservation_and_replay", invalid_deferred_fk)
     failed = client.post("/v1/reservations", json={"product_id": "demo"})
     assert failed.status_code == 500
     assert database_state(database_url) == (1, 0, 0)
     metrics = client.get("/metrics").text
     assert 'db_transactions_total{outcome="failed",role="primary"} 1.0' in metrics
     assert 'db_transactions_total{outcome="committed",role="primary"} 0.0' in metrics
-    monkeypatch.setattr(service, "save_idempotency", original)
+    monkeypatch.setattr(service, "save_reservation_and_replay", original)
     retried = client.post("/v1/reservations", json={"product_id": "demo"})
     assert retried.status_code == 201
     assert retried.headers["Idempotency-Replayed"] == "false"
@@ -283,23 +283,23 @@ def test_deleted_product_still_replays_committed_key_but_rejects_new_key(
     assert database_state(database_url) == (0, 1, 1)
 
 
-def test_idempotency_save_failure_and_retry(
+def test_idempotency_insert_failure_rolls_back_reservation_stock_and_can_retry(
     client: TestClient, database_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import template_fastcrud_api.services.reservations as service
+    import template_fastcrud_api.repositories.reservations as repository
 
-    original = service.save_idempotency
+    original = repository.idempotency_crud.create
 
-    async def fail(session, key, reservation):
-        await original(session, key, reservation)
-        raise RuntimeError("after key save")
+    async def fail(*, db, **kwargs):
+        assert await db.scalar(select(func.count()).select_from(ReservationModel)) == 1
+        raise RuntimeError("at key save")
 
-    monkeypatch.setattr(service, "save_idempotency", fail)
+    monkeypatch.setattr(repository.idempotency_crud, "create", fail)
     assert (
         client.post("/v1/reservations", json={"product_id": "demo"}).status_code == 500
     )
     assert database_state(database_url) == (1, 0, 0)
-    monkeypatch.setattr(service, "save_idempotency", original)
+    monkeypatch.setattr(repository.idempotency_crud, "create", original)
     assert (
         client.post("/v1/reservations", json={"product_id": "demo"}).status_code == 201
     )

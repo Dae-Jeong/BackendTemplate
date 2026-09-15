@@ -37,9 +37,9 @@ endpoint는 등록하지 않습니다. 실제 `.env`, `data/`, `.venv/`, `dist/`
 ## 저장 경계
 
 - `models/`: `DeclarativeBase`와 DB 제약
-- `repositories/`: FastCRUD 전용 Pydantic 입력, `create(..., commit=False)`와
-  `get()`, 조건부 재고 SQL, 내부 contract 변환
-- `services/`: `@transactional`로 예약·멱등성 원자 범위를 지정하고 업무 순서를 표현
+- `repositories/`: FastCRUD 전용 Pydantic 경계, `get()`, 조건부 재고 SQL,
+  reservation·replay 결합 저장과 내부 contract 변환
+- `services/`: `@transactional`로 원자 범위를 지정하고 replay 확인 → 재고 차감 → 결합 저장의 업무 순서를 표현
 - `core/transactions.py`: `session.begin()`·SQLite `BEGIN IMMEDIATE` 획득·중첩 전파·오류 번역·계측
 - `schemas/`: HTTP 입력·응답; Repository 입력과 공유하지 않음
 
@@ -49,6 +49,9 @@ FastCRUD는 transaction을 소유하지 않으며 ORM 객체를 Repository 밖�
 SAVEPOINT·REQUIRES_NEW는 지원하지 않습니다. 자동 `crud_router`는 인증·pagination·공개 응답 계약을 별도로 정한 뒤
 추가할 수 있는 후속 데모입니다. 상세 범위는
 [구현 설계](../../design/implementations/fastapi-fastcrud.md)를 봅니다.
+
+FastCRUD 0.22.3의 create 입력은 `model_dump()`을 제공하는 Pydantic 모델입니다. production에서
+쓰이지 않는 product create wrapper는 두지 않으며, SDK create 계약은 test-local 입력 모델로 직접 검증합니다.
 
 ## 검증
 

@@ -105,9 +105,14 @@ flowchart TD
     DEP --> ROUTER["router<br/>HTTP"]
     ROUTER --> SERVICE["Service<br/>@transactional 업무"]
     SERVICE --> BOUNDARY["core/transactions.py<br/>begin · commit/rollback · metrics"]
-    SERVICE --> REPO["Repository<br/>FastCRUD · SQL"]
-    REPO --> DB[("SQLite")]
-    REPO -. "내부 계약" .-> SERVICE
+    SERVICE --> REPLAY["Repository<br/>matching replay 조회"]
+    SERVICE --> STOCK["Repository<br/>조건부 재고 차감"]
+    SERVICE --> SAVE["Repository<br/>reservation + replay 저장"]
+    REPLAY --> DB[("SQLite")]
+    STOCK --> DB
+    SAVE --> CRUD["FastCRUD create × 2<br/>commit=False"]
+    CRUD --> DB
+    REPLAY -. "내부 계약" .-> SERVICE
     BOOT -. "종료" .-> DISPOSE["engine.dispose()"]
 ```
 
@@ -118,13 +123,16 @@ Service의 `@transactional`이 `core/transactions.py`에서 한 업무의 begin�
 rollback-only입니다. 다른 Task의 동시 Session 사용과 사전/autobegin transaction은 거절합니다.
 수동 begin/commit/rollback, 자동 SAVEPOINT·REQUIRES_NEW·readOnly·Replica routing은 지원하지 않습니다.
 
-`repositories/reservations.py`의 `ProductCreate`·`ProductSelect`·
-`ReservationCreate`·`IdempotencyCreate`·`IdempotencySelect`는 FastCRUD 저장
-경계 전용 Pydantic 입력입니다. HTTP schema와 공유하지 않습니다. `create_product`는
-라이브러리 동작을 보여 주는 Repository 예제이며 공개 product CRUD endpoint는 만들지 않았습니다.
-반환이 필요한 product create/get만 `schema_to_select`와 `return_as_model=True`를
-사용하고 내부 `Product` contract로 변환합니다. 예약·멱등 키 create는 반환이 필요하지
-않아 기본 `None`을 사용합니다.
+`repositories/reservations.py`의 `ProductSelect`·`ReservationCreate`·`IdempotencyRecord`는
+FastCRUD 경계 전용 Pydantic 모델이며 HTTP schema와 공유하지 않습니다. 같은 필드였던 멱등 키
+create/select 모델은 하나로 통합했습니다. production에서 쓰이지 않던 `create_product`는 제거했고,
+FastCRUD create 계약 시험은 test-local Pydantic 입력으로 SDK를 직접 호출합니다. FastCRUD 0.22.3의
+create는 `model_dump()`을 제공하는 Pydantic 입력 모델을 받습니다.
+
+Service는 replay 확인과 재고 차감 뒤 `save_reservation_and_replay` 한 번만 호출합니다. Repository는
+reservation과 성공 snapshot의 결합 저장을 소유하고 두 FastCRUD create 모두 `commit=False`로 실행합니다.
+Service는 FastCRUD keyword, persistence 모델, ORM 또는 `dict`를 알지 않으며 바깥 `@transactional`이
+재고·reservation·멱등 키의 commit/rollback을 계속 소유합니다.
 
 ## 예약은 명시적 SQL로 유지합니다
 
@@ -202,7 +210,7 @@ seed의 `ON CONFLICT DO NOTHING`도 재고와 삭제 상태를 바꾸지 않으�
 | 단계 | 상태 | 확인 내용 |
 | --- | --- | --- |
 | 설정·migration | 완료 | 독립 Python/package/lock/DB와 ORM metadata, Alembic revision을 생성했습니다. |
-| FastCRUD 경계 | 완료 | product create/get, reservation·idempotency create, key get에 FastCRUD 0.22.3을 사용합니다. |
+| FastCRUD 경계 | 완료 | 활성 product·key 조회와 reservation·replay 결합 저장에 FastCRUD 0.22.3을 사용하고, SDK create 계약은 직접 시험합니다. |
 | product audit·soft delete | 완료 | UTC create/update, FastCRUD delete, 활성 조회·재고 필터, rollback·seed·재생 정책을 검증했습니다. |
 | 예약 계약 | 완료 | 조건부 차감·snapshot·멱등성·commit 실패·thread/process 경합을 독립 SQLite에서 시험합니다. |
 | transaction 실행 | 완료 | `@transactional`의 중첩·rollback-only·소유권·오류 번역·두 outcome과 Session 재사용을 시험합니다. |
@@ -216,6 +224,8 @@ seed의 `ON CONFLICT DO NOTHING`도 재고와 삭제 상태를 바꾸지 않으�
 - Ruff check·format check와 ty가 통과했고 전체 pytest는 106개가 통과했습니다.
   Starlette 1.6.0의 `anyio.abc.BlockingPortal` 별칭 경고 1건은 기준선과 같은
   좁은 filter로 표시합니다.
+- 결합 저장 성공과 snapshot의 정확한 replay, reservation insert 뒤 멱등 키 insert 실패 시
+  재고·reservation·키 전체 rollback과 같은 키 재시도를 격리 SQLite에서 확인했습니다.
 - 새 audit migration은 빈 DB의 upgrade/check/downgrade/re-upgrade뿐 아니라 이전 revision의 product·reservation·
   idempotency snapshot을 채운 DB에서도 기존 값 보존, UTC backfill, FK 무결성을 검증했습니다. 의도한 FK 위반에서는
   schema·data·revision이 모두 이전 상태로 rollback되는 것도 확인했습니다. ORM/Core/FastCRUD update의

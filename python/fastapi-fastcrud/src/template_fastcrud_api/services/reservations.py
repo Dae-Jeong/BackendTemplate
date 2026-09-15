@@ -10,8 +10,7 @@ from template_fastcrud_api.core.transactions import transactional
 from template_fastcrud_api.repositories.reservations import (
     decrease_stock,
     find_matching_replay,
-    save_idempotency,
-    save_reservation,
+    save_reservation_and_replay,
 )
 
 
@@ -29,6 +28,5 @@ async def reserve(
         return ReservationResult(existing, replayed=True)
     await decrease_stock(session, product_id)
     reservation = Reservation(uuid4().hex, product_id, clock().astimezone(UTC))
-    await save_reservation(session, reservation)
-    await save_idempotency(session, key, reservation)
+    await save_reservation_and_replay(session, key, reservation)
     return ReservationResult(reservation, replayed=False)

@@ -4,6 +4,7 @@ from typing import cast
 from unittest.mock import patch
 
 import pytest
+from pydantic import BaseModel
 from sqlalchemy import func, select, update
 from sqlalchemy.engine import Row
 from sqlalchemy.exc import IntegrityError
@@ -15,15 +16,24 @@ from template_fastcrud_api.core.database_metrics import create_database_metrics
 from template_fastcrud_api.core.metrics import create_metrics
 from template_fastcrud_api.core.settings import Settings
 from template_fastcrud_api.exceptions.reservations import ProductNotFound
-from template_fastcrud_api.models.reservations import ProductModel, ReservationModel
+from template_fastcrud_api.models.reservations import (
+    IdempotencyKeyModel,
+    ProductModel,
+    ReservationModel,
+)
 from template_fastcrud_api.repositories.reservations import (
-    create_product,
     decrease_stock,
+    find_matching_replay,
     get_product,
     product_crud,
-    save_reservation,
+    save_reservation_and_replay,
     seed_product,
 )
+
+
+class ProductData(BaseModel):
+    id: str
+    available: int
 
 
 def test_fastcrud_create_flushes_refreshes_and_outer_transaction_rolls_back(
@@ -51,9 +61,17 @@ def test_fastcrud_create_flushes_refreshes_and_outer_transaction_rolls_back(
                                 session, "refresh", wraps=session.refresh
                             ) as refresh,
                         ):
-                            product = await create_product(session, "fastcrud", 2)
+                            created = await product_crud.create(
+                                db=session,
+                                object=ProductData(id="fastcrud", available=2),
+                                commit=False,
+                                schema_to_select=ProductData,
+                                return_as_model=True,
+                            )
                         flush.assert_awaited_once()
                         refresh.assert_awaited_once()
+                        assert created == ProductData(id="fastcrud", available=2)
+                        product = await get_product(session, "fastcrud")
                         assert product == Product("fastcrud", 2)
                         assert not isinstance(product, ProductModel)
                         assert (
@@ -64,18 +82,30 @@ def test_fastcrud_create_flushes_refreshes_and_outer_transaction_rolls_back(
                             )
                             == 1
                         )
-                        saved = await save_reservation(
+                        reservation = Reservation(
+                            reservation_id="reservation",
+                            product_id="fastcrud",
+                            created_at=datetime(2026, 9, 15, tzinfo=UTC),
+                        )
+                        saved = await save_reservation_and_replay(
                             session,
-                            Reservation(
-                                reservation_id="reservation",
-                                product_id="fastcrud",
-                                created_at=datetime(2026, 9, 15, tzinfo=UTC),
-                            ),
+                            "test-key",
+                            reservation,
                         )
                         assert saved is None
                         assert (
+                            await find_matching_replay(session, "test-key", "fastcrud")
+                            == reservation
+                        )
+                        assert (
                             await session.scalar(
                                 select(func.count()).select_from(ReservationModel)
+                            )
+                            == 1
+                        )
+                        assert (
+                            await session.scalar(
+                                select(func.count()).select_from(IdempotencyKeyModel)
                             )
                             == 1
                         )
@@ -89,6 +119,12 @@ def test_fastcrud_create_flushes_refreshes_and_outer_transaction_rolls_back(
                 assert (
                     await session.scalar(
                         select(func.count()).select_from(ReservationModel)
+                    )
+                    == 0
+                )
+                assert (
+                    await session.scalar(
+                        select(func.count()).select_from(IdempotencyKeyModel)
                     )
                     == 0
                 )
@@ -116,7 +152,11 @@ def test_product_timestamps_cover_defaults_orm_core_fastcrud_and_rollback(
         try:
             async with factory() as session:
                 async with session.begin():
-                    await create_product(session, "defaulted", 1)
+                    await product_crud.create(
+                        db=session,
+                        object=ProductData(id="defaulted", available=1),
+                        commit=False,
+                    )
                 defaulted = await session.get(ProductModel, "defaulted")
                 assert defaulted is not None
                 assert defaulted.created_at.tzinfo is UTC
@@ -265,7 +305,11 @@ def test_product_soft_delete_is_opt_in_filtered_and_rollback_safe(
                 session.expunge(product)
                 with pytest.raises(IntegrityError):
                     async with session.begin():
-                        await create_product(session, "deleted", 100)
+                        await product_crud.create(
+                            db=session,
+                            object=ProductData(id="deleted", available=100),
+                            commit=False,
+                        )
                 persisted = await session.get(ProductModel, "deleted")
                 assert persisted is not None
                 assert persisted.available == 3
