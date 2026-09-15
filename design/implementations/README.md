@@ -4,6 +4,8 @@
 공통 계약은 [Backend](../backend.md), [개발 원칙](../engineering.md), [관측](../observability.md),
 [Runtime Review](../runtime-review.md)를 참조합니다.
 
+[예약 코드 책임 정리 설계](responsibility-cleanup.md)는 네 구현의 개선안과 기존 개발·검증 규칙에 대한 검토를 담습니다. 제안 단계이며 현재 구현 상태를 대체하지 않습니다.
+
 ## 현재 제공 범위
 
 추가 준비 중인 [Prisma·Rails 작업 단계](prisma-rails-tasks.md)는 구현 완료 범위와 구분합니다.

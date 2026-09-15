@@ -67,6 +67,7 @@ nav:
   - 상세 설명:
       - 프로젝트 개요: design/overview.md
       - 구현별 현황: design/implementations/README.md
+      - 예약 코드 책임 정리 설계: design/implementations/responsibility-cleanup.md
       - FastAPI:
           - 실행 환경과 명령: python/fastapi/README.md
           - 폴더와 역할: design/implementations/fastapi-structure.md
