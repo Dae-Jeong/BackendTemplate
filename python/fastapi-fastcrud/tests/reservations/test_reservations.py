@@ -130,7 +130,7 @@ def test_save_failure_rolls_back_stock(
     assert "synthetic-private-error" not in response.text
     assert database_state(database_url) == (1, 0, 0)
     metrics = client.get("/metrics").text
-    assert 'db_transactions_total{outcome="rolled_back",role="primary"} 1.0' in metrics
+    assert 'db_transactions_total{outcome="failed",role="primary"} 1.0' in metrics
 
 
 def test_commit_failure_rolls_back_and_same_key_can_retry(

@@ -2,8 +2,8 @@
 
 Status: 승인된 구현별 책임 정리 완료 · 2026-09-15
 
-후속 [트랜잭션 실행 책임 정리안](transaction-boundaries.md)은 FA-1·RA-3 유지 판정과
-FastAPI/NestJS outcome을 재검토합니다. 아직 제안 단계이며 아래 내용은 현재 구현과 이전 완료 기록입니다.
+후속 [트랜잭션 실행 책임](transaction-boundaries.md)은 FA-1 유지 판정을 Python 구현 결과로 대체했습니다.
+NestJS·Rails 후속은 아직 제안이며 아래 내용에는 이전 완료 기록도 포함됩니다.
 
 이 문서는 현재 코드의 책임 검토 결과와 작게 나눈 후속 작업을 기록한다. 공통
 정책을 복제하지 않고 [개발 원칙](../engineering.md), [Backend](../backend.md),
@@ -15,8 +15,8 @@ FastAPI/NestJS outcome을 재검토합니다. 아직 제안 단계이며 아래 
 
 현재 구조는 대부분 업무 의미 repository와 Service의 업무 트랜잭션 경계를 이미 지킨다.
 공통 UnitOfWork나 네 구현 공용 runner는 만들지 않는다. 다만 NestJS는 승인된 범위에서
-업무에서 분리한 기술 실행 경계를 injectable `TransactionRunner`로 구현했다. 이 예외는 FastAPI·Spring Boot·Rails의
-runner 금지를 변경하지 않는다. replay의 key/product 일치 판단은 저장된 replay를 읽는
+업무에서 분리한 기술 실행 경계를 injectable `TransactionRunner`로 구현했다. FastAPI 두 앱은 후속 작업에서
+작은 `@transactional` 경계를 구현했으며 공용 UnitOfWork/framework는 만들지 않았다. replay의 key/product 일치 판단은 저장된 replay를 읽는
 repository의 업무 의미이며, reservation aggregate 저장도 한 repository 안에
 남긴다. Spring의 제품 seed는 예약 Service에서 독립된 제품 소유자로 좁힌다.
 
@@ -42,20 +42,20 @@ NestJS의 `T`는 실제 runner이고 FastAPI·Spring Boot에서는 각 기존 �
 연결 획득과 begin 순서는 구현별로 유지한다. Spring의 claim 경합은 rollback 이후
 별도 replay 조회로 처리하며 예약 업무를 무조건 재실행하는 자동 retry가 아니다.
 
-완료는 flush가 아니라 commit 성공이다. FastAPI/Nest의 body 예외와 rollback 성공은 `rolled_back`,
-commit/rollback boundary failure는 `failed`다. commit 뒤 release/cleanup 실패는
+완료는 flush가 아니라 commit 성공이다. 이 문서 작성 당시 FastAPI/Nest의 body 예외와 rollback 성공은 `rolled_back`,
+commit/rollback boundary failure는 `failed`였습니다. 현재 Python의 `committed / failed` 계약은 후속 문서가 대체합니다. commit 뒤 release/cleanup 실패는
 실제 DB 완료와 자원 cleanup 결과를 별도로 다루며 새 공통 계약을 만들지 않는다.
 Nest runner도 이 결과를 숨기지 않고 callback/commit/rollback/release 오류를 구분한다.
 
 ## FastAPI
 
-실제 경로는 `services/reservations.py:reserve/ reserve_once`,
+실제 경로는 `services/reservations.py:reserve`, `core/transactions.py:transactional`,
 `repositories/reservations.py:seed_product/find_matching_replay/decrease_stock/save_*`,
 `core/database.py:acquire_primary_connection`, `seed.py:seed`이다.
 
 | 작은 작업 | 책임·파일/시그니처 | callsite 변화와 보존할 동작 | 검증 매핑 |
 | --- | --- | --- | --- |
-| FA-1 기술 경계 유지 판정 | **유지 확인**. `reserve(...)`는 business transaction/outcome, `acquire_primary_connection(...)`는 acquire/acquisition metric/error를 계속 담당 | nested body-error 판정, `TimeoutError→DatabasePoolTimeout`, SQLite busy 번역과 metric failure 격리를 유지. helper 추가 없음 | [FastAPI replay 검증](fastapi-verification.md#replay-조회-명명-검증--2026-09-15) |
+| FA-1 기술 경계 유지 판정 | **후속 구현으로 대체**. `@transactional`이 transaction/outcome·오류 번역을, Service가 업무 순서를 소유 | 같은 Session 중첩·rollback-only·동시 Task 거절 포함 | [transactional decorator 검증](fastapi-verification.md#transactional-decorator-검증--2026-09-15) |
 | FA-2 replay 이름 명시 | **구현**. `find_matching_replay(session, key, product_id)`와 Service callsite로 변경 | key 없음/일치 replay/mismatch conflict의 세 갈래가 이름에 드러남. conflict policy를 Service로 이동하지 않고 response 불변 | [FastAPI replay 검증](fastapi-verification.md#replay-조회-명명-검증--2026-09-15) |
 | FA-3 seed scope | **유지 확인**. `seed.py:seed(product_id, stock)`가 seed application flow, repository `seed_product(session, product_id, stock)`가 제품 upsert/no-reset 소유 | seed는 `ReserveRequest`의 기존 CLI 입력 검증을 유지하고, reservation service를 호출하지 않음. 최초 stock만 기록하고 반복 seed는 현재 stock 보존 | [FastAPI replay 검증](fastapi-verification.md#replay-조회-명명-검증--2026-09-15) |
 | FA-4 오류/metrics 회귀 케이스 보강 | 기존 public signatures 유지; 필요할 때만 `DatabaseMetrics.record_transaction`/`record_acquisition`의 safe recording을 재사용 | metrics failure가 업무 오류를 덮지 않고, commit/rollback/cleanup precedence를 현재 의미로 고정 | [test_metrics.py](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/python/fastapi/tests/test_metrics.py), [test_application_errors.py](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/python/fastapi/tests/test_application_errors.py) — 기존 확인 범위, 추가 케이스는 **미실행** |
@@ -149,7 +149,7 @@ Rails idempotency 구현은 이 문서 범위가 아니다.
 | [engineering: Application](../engineering.md#application과-입력-경계) | 적합 — Service가 업무 흐름·원자적 범위를 정함 | Nest의 기술 실행은 runner; DB SQL은 repository; HTTP DTO는 Service 안으로 들이지 않음 |
 | [Backend transaction](../backend.md) | 조건부 — commit 성공만 완료 | flush/insert 반환을 성공으로 세지 않음; commit/rollback failure는 failed |
 | [observability](../observability.md) | 조건부 — 경계별 의미 유지 | metrics failure가 원래 오류·응답을 덮지 않으며 구현별 label 의미를 섞지 않음 |
-| [FastAPI structure](fastapi-structure.md) | 적합 — dependency/session 수명 기존 조립 유지 | acquire는 outer transaction 안에서 한 번; generic runner 금지 |
+| [FastAPI structure](fastapi-structure.md) | 적합 — dependency/session 수명 기존 조립 유지 | decorator가 acquire를 outer transaction 안에서 한 번 수행; 공용 UoW/framework 금지 |
 | [NestJS structure](nestjs-structure.md) | 적합 — runner가 lease를 조립하고 Primary가 pool/cleanup 소유 | Service가 pool timeout·busy를 번역하지 않음; dirty connection 폐기 필수 |
 | [Spring structure](spring-boot-structure.md) | 조건부 — public proxy transaction 유지 | `ReservationAttempts`와 `ReservationService` self-invocation 분리 유지 |
 | [Rails structure](rails-structure.md) | 조건부 — ActiveRecord idiom 유지 | repository/base/strategy/idempotency framework 도입 안 함 |

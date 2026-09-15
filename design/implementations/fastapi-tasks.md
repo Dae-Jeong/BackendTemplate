@@ -271,8 +271,8 @@ SQLite Primary 연결 기반과 연결 점유 계측을 함께 구현합니다.
 Status: 완료 · 2026-09-08. 실제 파일 DB의 성공·중간 실패·지연 FK commit 실패·rollback 실패 주입,
 요청별 Session 격리·취소 후 반환·pool timeout 후 회복·SQLite 잠금 실패 구분을 검증했습니다.
 이 단계의 시험 업무는 `tests/dependencies/test_database.py`이며 이후 6-4에서 실제 예약 API에 연결했습니다.
-서비스는 `acquire_primary_connection`으로 획득하고 `record_transaction`으로 확정 결과를 기록합니다.
-자동 commit wrapper는 추가하지 않았습니다.
+현재는 후속 Task 10의 `@transactional`이 `acquire_primary_connection`과 완료 계측을 소유하며,
+이 절의 당시 Service 직접 구현을 대체했습니다.
 
 목표:
 명시적 Session 제공과 업무 트랜잭션에 수명·획득·결과 계측을 연결합니다.
@@ -327,6 +327,15 @@ Status: 완료 · 2026-09-08. [실행 결과와 재현 절차](fastapi-verificat
 Repository의 `get_replay`를 실제 일치 판단을 드러내는 `find_matching_replay`로 바꾸고
 Service callsite를 함께 변경했습니다. 별도 replay 계층이나 새 테스트는 추가하지 않았으며,
 기존 예약 전체 시험으로 일치 재생·다른 입력 충돌·재고 불변과 경합·복구 동작을 확인했습니다.
+
+### Task 10. transactional decorator 경계
+
+Status: 완료 · 2026-09-15.
+
+`core/transactions.py`가 Service의 begin·write connection 선점·commit/rollback·DB 오류 번역·두 outcome 계측을
+인수했습니다. required keyword-only `session`, `metrics`와 같은 Task·Session 중첩, rollback-only,
+autobegin/동시 재사용 거절을 실제 경계 시험으로 검증했습니다. Session dependency·seed maintenance 범위와
+예약 API·멱등성·동시성 계약은 유지합니다. 상세 결과는 [검증 기록](fastapi-verification.md#transactional-decorator-검증--2026-09-15)이 소유합니다.
 
 ## Task 9. PostgreSQL 전환
 

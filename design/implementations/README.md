@@ -7,7 +7,7 @@
 [예약 코드 책임 정리](responsibility-cleanup.md)는 기존 개발·검증 규칙에 대한 검토와 구현별 상태를 담습니다.
 승인된 NestJS·FastAPI·Spring Boot·Rails 책임 정리 항목은 구현별 검증 기록과 함께 완료했습니다.
 
-[트랜잭션 실행 책임 정리안](transaction-boundaries.md)은 서비스와 DB 기술 처리의 분리를 다루는 후속 설계입니다. 구현 전 검토안입니다.
+[트랜잭션 실행 책임](transaction-boundaries.md)은 Python 두 앱의 구현 결과와 NestJS·Rails 후속 제안을 구분합니다.
 
 ## 현재 제공 범위
 
@@ -38,7 +38,7 @@ DB를 설정하지 않으면 예약 기능은 등록하지 않습니다.
 | DI | dependency layer·Depends | dependency layer·Depends | 생성자·Provider·주입 토큰 | 생성자·Bean·transaction proxy |
 | 첫 DB | SQLite | SQLite | SQLite | H2 file |
 | DB 접근·migration | SQLAlchemy Core·Alembic | FastCRUD·SQLAlchemy ORM·Alembic | Drizzle·worker의 better-sqlite3·Drizzle Kit | Spring Data JPA·Hibernate·Hikari·Flyway |
-| 업무 transaction | Service의 session.begin | Service의 session.begin | Service의 transaction callback | public Service의 @Transactional |
+| 업무 transaction | Service의 `@transactional` | Service의 `@transactional` | Service의 transaction callback | public Service의 @Transactional |
 
 응답 의미·업무 원자성·자원 수명은 맞추고 프레임워크의 파일 배치·실행 모델까지 동일하게 강제하지 않습니다.
 SQLite의 쓰기 직렬화와 H2의 키별/행별 경합은 다른 구현입니다.

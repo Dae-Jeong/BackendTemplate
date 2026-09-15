@@ -39,12 +39,14 @@ endpoint는 등록하지 않습니다. 실제 `.env`, `data/`, `.venv/`, `dist/`
 - `models/`: `DeclarativeBase`와 DB 제약
 - `repositories/`: FastCRUD 전용 Pydantic 입력, `create(..., commit=False)`와
   `get()`, 조건부 재고 SQL, 내부 contract 변환
-- `services/`: `session.begin()`과 SQLite `BEGIN IMMEDIATE` 획득, 예약·멱등성
-  원자성
+- `services/`: `@transactional`로 예약·멱등성 원자 범위를 지정하고 업무 순서를 표현
+- `core/transactions.py`: `session.begin()`·SQLite `BEGIN IMMEDIATE` 획득·중첩 전파·오류 번역·계측
 - `schemas/`: HTTP 입력·응답; Repository 입력과 공유하지 않음
 
 FastCRUD는 transaction을 소유하지 않으며 ORM 객체를 Repository 밖으로 반환하지
-않습니다. 자동 `crud_router`는 인증·pagination·공개 응답 계약을 별도로 정한 뒤
+않습니다. HTTP dependency는 Session 수명만 제공하고, decorated Service는 required keyword-only
+`session`, `metrics`를 받습니다. 같은 Task·Session 중첩만 참여하며 수동 commit/rollback과
+SAVEPOINT·REQUIRES_NEW는 지원하지 않습니다. 자동 `crud_router`는 인증·pagination·공개 응답 계약을 별도로 정한 뒤
 추가할 수 있는 후속 데모입니다. 상세 범위는
 [구현 설계](../../design/implementations/fastapi-fastcrud.md)를 봅니다.
 

@@ -48,7 +48,7 @@ uv tool run --from uv==0.12.10 uv run --locked alembic revision \
 | --- | --- |
 | async SQLAlchemy ORM 기반 create/get/update/delete | 단순 관리 데이터의 Repository 함수 안에서 사용합니다. ORM 객체는 Repository 밖으로 반환하지 않습니다. |
 | 필터·정렬·offset/cursor pagination·join | 필요한 조회에 한해 명시적으로 노출하고 무제한 `limit=None`은 공개 API에서 허용하지 않습니다. |
-| `commit=False`로 커밋 위임 | SQL 실행을 미루는 옵션이 아닙니다. 모든 업무 쓰기에 명시하고 최종 commit/rollback은 바깥 Service의 `session.begin()`이 소유합니다. |
+| `commit=False`로 커밋 위임 | SQL 실행을 미루는 옵션이 아닙니다. 모든 업무 쓰기에 명시하고 최종 commit/rollback은 Service의 `@transactional` 경계가 소유합니다. |
 | `schema_to_select`와 `return_as_model` 반환 | create 결과가 필요하면 둘을 지정합니다. 생략하면 `create()`는 `None`을 반환합니다. |
 | `crud_router` 자동 endpoint | 인증 없는 로컬 관리 CRUD 데모에만 선택적으로 사용합니다. 예약 흐름에는 사용하지 않습니다. |
 | soft delete·bulk/upsert·관계 포함 | soft delete는 변경 가능한 `ProductModel`에만 opt-in합니다. 전역 필터·자동 endpoint·복구 API는 만들지 않습니다. 나머지는 제품 요구가 생긴 뒤 도입합니다. |
@@ -70,16 +70,16 @@ FastCRUD 0.22.3의 `create(..., commit=False)`는 내부에서 `flush()`와 `ref
 | `models/mixins.py` | 독립 조합 가능한 UTC timestamp·soft-delete column과 SQLite UTC 복원 타입을 소유합니다. |
 | `models/reservations.py` | product·reservation·idempotency mapped class와 DB 제약을 소유합니다. |
 | `repositories/` | FastCRUD 호출과 특수 SQL, ORM↔내부 계약 변환을 소유합니다. commit하지 않습니다. |
-| `services/` | 업무 순서·정책·transaction 경계를 소유합니다. HTTP schema와 ORM을 반환하지 않습니다. |
+| `services/` | `@transactional`로 업무 범위를 표시하고 순서·정책을 소유합니다. HTTP schema와 ORM을 반환하지 않습니다. |
 | `contracts/` | HTTP·Pydantic·ORM과 분리한 불변 업무 입력·결과를 소유합니다. |
 | `schemas/` | 공개 HTTP 요청·응답과 envelope를 소유합니다. Router에서 내부 계약으로 변환합니다. |
 | `routers/` | HTTP 검증·응답 변환을 수행하고 Service를 호출합니다. |
-| `core/` | settings·DB Engine/Session factory·clock·logging·metrics를 소유합니다. |
+| `core/` | settings·DB Engine/Session factory·`@transactional` 실행·clock·logging·metrics를 소유합니다. |
 | `http/` | Problem 응답, 예외 변환, ASGI 관측 경계를 소유합니다. |
 | `tests/` | 역할 단위 시험과 예약·경합·재생·migration 시나리오를 둡니다. 소스와 일대일 파일을 강제하지 않습니다. |
 | `migrations/` · `alembic.ini` | ORM metadata를 읽는 Alembic 환경과 검토된 revision을 소유합니다. |
 
-함수 중심으로 시작합니다. 범용 `BaseRepository`, transaction runner, 비어 있는 Facade는 만들지 않습니다.
+함수 중심으로 시작합니다. 범용 `BaseRepository`, Unit of Work, 비어 있는 Facade는 만들지 않습니다.
 여러 업무를 실제로 조합할 때만 `services/<업무>.py` 함수가 조합 책임을 맡습니다.
 
 ```mermaid
@@ -103,7 +103,8 @@ flowchart LR
 flowchart TD
     BOOT["bootstrap<br/>Engine · factory"] --> DEP["dependency<br/>요청별 Session"]
     DEP --> ROUTER["router<br/>HTTP"]
-    ROUTER --> SERVICE["Service<br/>transaction"]
+    ROUTER --> SERVICE["Service<br/>@transactional 업무"]
+    SERVICE --> BOUNDARY["core/transactions.py<br/>begin · commit/rollback · metrics"]
     SERVICE --> REPO["Repository<br/>FastCRUD · SQL"]
     REPO --> DB[("SQLite")]
     REPO -. "내부 계약" .-> SERVICE
@@ -111,8 +112,11 @@ flowchart TD
 ```
 
 FastCRUD는 Repository 구현 도구이지 transaction 경계가 아닙니다. HTTP dependency는 Session 생성·정리만 하고,
-Service가 `async with session.begin()`으로 한 업무의 commit/rollback을 결정합니다. Repository의 모든 쓰기는
-`commit=False`를 명시하며 내부 Service나 Repository가 중첩 `begin()`을 열지 않습니다. 한 Session을 동시 task에 공유하지 않습니다.
+Service의 `@transactional`이 `core/transactions.py`에서 한 업무의 begin·write connection·commit/rollback·오류 번역·
+계측을 실행합니다. Service signature는 required keyword-only `session`, `metrics`를 명시합니다. Repository의 모든 쓰기는
+`commit=False`를 유지합니다. 같은 Task·Session의 decorated 중첩 호출만 바깥 transaction에 참여하며 내부 실패를 잡아도
+rollback-only입니다. 다른 Task의 동시 Session 사용과 사전/autobegin transaction은 거절합니다.
+수동 begin/commit/rollback, 자동 SAVEPOINT·REQUIRES_NEW·readOnly·Replica routing은 지원하지 않습니다.
 
 `repositories/reservations.py`의 `ProductCreate`·`ProductSelect`·
 `ReservationCreate`·`IdempotencyCreate`·`IdempotencySelect`는 FastCRUD 저장
@@ -127,7 +131,7 @@ Service가 `async with session.begin()`으로 한 업무의 commit/rollback을 �
 예약은 일반 CRUD가 아닙니다. 키 재생 확인 → 조건부 재고 차감 → 예약과 성공 snapshot 저장을 같은 transaction에서
 수행합니다. 다음 SQLAlchemy 문장은 현재 기준선과 같은 원자적 조건을 보존하며 Repository 안에 둡니다.
 
-SQLite 예약 Service는 `session.begin()`에 들어간 직후 `acquire_primary_connection(..., write=True)`로
+SQLite 예약 decorator는 `session.begin()`에 들어간 직후 `acquire_primary_connection(..., write=True)`로
 `BEGIN IMMEDIATE` 연결을 명시적으로 획득하고, 그 다음에 첫 멱등 키 조회를 수행합니다. `session.begin()`만으로
 writer 선점을 대신하지 않으며, 같은 키 경합을 키 조회 전부터 SQLite의 제한 시간 안에서 직렬화합니다.
 
@@ -201,6 +205,7 @@ seed의 `ON CONFLICT DO NOTHING`도 재고와 삭제 상태를 바꾸지 않으�
 | FastCRUD 경계 | 완료 | product create/get, reservation·idempotency create, key get에 FastCRUD 0.22.3을 사용합니다. |
 | product audit·soft delete | 완료 | UTC create/update, FastCRUD delete, 활성 조회·재고 필터, rollback·seed·재생 정책을 검증했습니다. |
 | 예약 계약 | 완료 | 조건부 차감·snapshot·멱등성·commit 실패·thread/process 경합을 독립 SQLite에서 시험합니다. |
+| transaction 실행 | 완료 | `@transactional`의 중첩·rollback-only·소유권·오류 번역·두 outcome과 Session 재사용을 시험합니다. |
 | HTTP·관측 | 완료 | 기존 envelope·Problem·health·logging·HTTP/DB metrics 계약을 같은 의미로 시험합니다. |
 | 후속 | 미구현 | `crud_router`, pagination 공개 API, 인증, PostgreSQL, Compose·운영 배포입니다. |
 
@@ -208,7 +213,7 @@ seed의 `ON CONFLICT DO NOTHING`도 재고와 삭제 상태를 바꾸지 않으�
 
 - Python 3.14.7, FastAPI 0.141.1, FastCRUD 0.22.3, SQLAlchemy 2.0.53,
   Uvicorn 0.53.0을 lockfile 환경에서 확인했습니다.
-- Ruff check·format check와 ty가 통과했고 전체 pytest는 102개가 통과했습니다.
+- Ruff check·format check와 ty가 통과했고 전체 pytest는 106개가 통과했습니다.
   Starlette 1.6.0의 `anyio.abc.BlockingPortal` 별칭 경고 1건은 기준선과 같은
   좁은 filter로 표시합니다.
 - 새 audit migration은 빈 DB의 upgrade/check/downgrade/re-upgrade뿐 아니라 이전 revision의 product·reservation·

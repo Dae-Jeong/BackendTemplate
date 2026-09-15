@@ -70,7 +70,7 @@ nav:
       - 프로젝트 개요: design/overview.md
       - 구현별 현황: design/implementations/README.md
       - 예약 코드 책임 정리 설계: design/implementations/responsibility-cleanup.md
-      - 트랜잭션 실행 책임 정리안: design/implementations/transaction-boundaries.md
+      - 트랜잭션 실행 책임: design/implementations/transaction-boundaries.md
       - FastAPI:
           - 실행 환경과 명령: python/fastapi/README.md
           - 폴더와 역할: design/implementations/fastapi-structure.md

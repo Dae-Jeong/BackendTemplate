@@ -480,7 +480,7 @@ flowchart LR
     LIFE --> FACTORY["앱별 async_sessionmaker"]
     FACTORY --> DEP["HTTP dependency · 새 Primary Session 제공/정리"]
     DEP --> ROUTER["router · 입력 해석과 결과 전달"]
-    ROUTER --> SERVICE["바깥쪽 업무 service · begin / commit / rollback"]
+    ROUTER --> SERVICE["업무 service · @transactional"]
     FUTURE["후속 진입점 · WebSocket 메시지 / GraphQL mutation"] -. "업무별 Session으로 호출 · 미구현" .-> SERVICE
     SERVICE --> REPO["repository · 같은 Session으로 SQL"]
     LIFE -->|"시작 실패 / 종료"| DISPOSE["engine.dispose"]
@@ -488,7 +488,7 @@ flowchart LR
 
 Engine은 실제 단일 연결이 아니라 연결·pool의 관리 객체입니다. import 시 전역 Engine/Session을 생성하지 않습니다.
 Session은 요청마다 만들되 DB 연결은 필요할 때 pool에서 획득합니다. 요청 종료 dependency에 자동 commit을 숨기지 않습니다.
-서비스의 명시적인 트랜잭션 구간에서 성공 시 commit, 실패 시 rollback하고 응답 직렬화 전에 완료합니다.
+`@transactional`이 서비스의 명시적인 업무 경계에서 성공 시 commit, 실패 시 rollback하고 응답 직렬화 전에 완료합니다.
 
 ### Session 제공과 트랜잭션 소유권
 
@@ -498,9 +498,14 @@ Session은 요청마다 만들되 DB 연결은 필요할 때 pool에서 획득�
 - `dependencies/database.py`는 새 `AsyncSession`을 생성해 `yield`하고 정리합니다.
   HTTP router만 `Depends`를 사용하고 업무에는 Session을 일반 인자로 전달합니다.
   일반 JSON API는 라우터 종료 후 Session을 사용하지 않도록 하고 `scope="function"`으로 정리합니다.
-- 바깥쪽 예약 업무 함수가 `async with session.begin()`을 소유합니다. 정상 블록 종료 시 commit,
-  예외가 블록 밖으로 전파되면 rollback합니다. commit 실패도 업무 실패로 전파합니다.
-  내부 서비스·Repository는 같은 Session을 전달받으며 별도 `begin()`·commit을 수행하지 않습니다.
+- `core/transactions.py`의 `@transactional`을 원자적 업무 Service에 붙입니다. Service는 required keyword-only
+  `session: AsyncSession`과 `metrics: DatabaseMetrics`를 명시하며, decorator가 begin·write connection 선점·
+  commit/rollback·기술 오류 번역·계측을 소유합니다. Service는 업무 순서만 표현합니다.
+- 같은 asyncio Task와 같은 Session의 decorated Service 호출은 바깥 transaction에 참여합니다. 중첩 실패를
+  바깥 Service가 잡아도 rollback-only가 유지됩니다. 다른 Task의 같은 Session 동시 사용과 임의의 기존/autobegin
+  transaction은 거절하며 기존 transaction을 commit·rollback하지 않습니다.
+- Service와 Repository는 수동 `begin()`·`begin_nested()`·commit·rollback을 호출하지 않습니다.
+  raw `begin_nested()`는 자동 전파 계약이 아니며 SAVEPOINT·REQUIRES_NEW·readOnly·Replica routing은 후속입니다.
   필요한 `flush()`는 허용하지만 최종 확정으로 취급하지 않습니다.
 - 업무에 전달할 Session에는 사전 쿼리를 실행하지 않습니다. 인증 등에서 DB 조회가 필요하면
   별도 수명의 Session을 사용하며, 변경 판단에 필요한 상태는 업무 트랜잭션 안에서 다시 확인합니다.
@@ -512,7 +517,7 @@ Session은 요청마다 만들되 DB 연결은 필요할 때 pool에서 획득�
   전체 원자성을 보장하지 않습니다. 전체 원자성이 필요하면 하나의 조합 업무로 정의합니다.
   동시 실행 resolver·메시지 task는 같은 Session을 공유하지 않습니다.
 - WebSocket·GraphQL·worker 지원은 후속 적용 기준이며 이번 구현 범위가 아닙니다.
-  공통 트랜잭션 미들웨어·데코레이터·범용 Unit of Work는 먼저 추가하지 않습니다.
+  요청 전체 transaction middleware·범용 Unit of Work는 추가하지 않습니다.
 
 참고: [FastAPI yield dependency scope](https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/#early-exit-and-scope),
 [SQLAlchemy Session 트랜잭션](https://docs.sqlalchemy.org/en/20/orm/session_transaction.html).
@@ -555,12 +560,12 @@ AsyncEngine의 `sync_engine` 인스턴스에 listener를 등록하며 전역 Eng
 | `db_sessions_active` | 우리 Session 제공자가 생성하고 아직 정리하지 않은 Session 수 | 6-2 |
 | `db_connection_acquire_seconds` | 업무 트랜잭션 안에서 명시적 `await session.connection()` 호출부터 반환/실패까지. pool 대기·새 연결·검증·SQLite BEGIN IMMEDIATE의 쓰기 잠금 대기를 포함 | 6-2 |
 | `db_pool_timeouts_total` | 위 획득 경계에서 확인한 pool timeout만 집계. SQLite 쓰기 잠금 timeout과 구분 | 6-2 |
-| `db_transactions_total`, `db_transaction_duration_seconds` | 바깥쪽 업무의 begin 진입부터 commit/rollback 정리 종료까지. 결과는 `committed`, `rolled_back`, `failed`로 구분 | 6-2 시험, 6-4 실제 예약 연결 |
+| `db_transactions_total`, `db_transaction_duration_seconds` | decorator가 소유한 바깥 업무의 begin 진입부터 commit/rollback 정리 종료까지. 결과는 `committed`, `failed` | 6-2 시험, 6-4 실제 예약 연결 |
 
 checkout 이벤트는 연결 획득 후 발생하므로 그 이벤트만으로 pool 대기 시간을 계산하지 않습니다.
 획득 계측은 `session.begin()` 안에 위치시키며 계측 때문에 사전 쿼리나 별도 트랜잭션을 만들지 않습니다.
-commit 시도 이벤트를 성공으로 세지 않습니다. commit 완료 후에만 `committed`, 업무 예외/취소 뒤
-rollback 완료 시 `rolled_back`, commit·rollback 자체 실패 시 `failed`를 기록합니다. 원래 예외·취소를 보존합니다.
+commit 시도 이벤트를 성공으로 세지 않습니다. commit 완료 후에만 `committed`, 획득·begin·업무·commit·rollback
+실패와 취소는 `failed`를 기록합니다. `failed`는 rollback 성공을 주장하지 않습니다. 원래 예외·취소를 보존합니다.
 pool 내부의 reset rollback이나 시작 연결 확인을 업무 트랜잭션 건수에 섞지 않습니다.
 재생 요청도 업무 트랜잭션을 commit하므로 commit 건수는 신규 예약 수가 아닙니다.
 

@@ -12,7 +12,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import uvicorn
-from dependencies.test_database import schema, write_sample
+from dependencies.test_database import create_schema, write_sample
 from fastapi import FastAPI
 from sqlalchemy import text
 from sqlalchemy.exc import TimeoutError
@@ -28,13 +28,18 @@ async def workload(app: FastAPI) -> None:
         print("phase=idle", flush=True)
         await asyncio.sleep(20)
         async with primary_session(factory, metrics) as session:
-            await write_sample(session, metrics)
+            await write_sample(session=session, metrics=metrics, value=1)
         async with app.state.primary_engine.begin() as connection:
             await connection.execute(text("DELETE FROM child"))
             await connection.execute(text("DELETE FROM parent"))
         async with primary_session(factory, metrics) as session:
             try:
-                await write_sample(session, metrics, fail=True)
+                await write_sample(
+                    session=session,
+                    metrics=metrics,
+                    value=1,
+                    error=ValueError("monitoring failure"),
+                )
             except ValueError:
                 pass
         async with primary_session(factory, metrics) as session, session.begin():
@@ -75,7 +80,7 @@ def main() -> None:
         @asynccontextmanager
         async def lifespan(application: FastAPI) -> AsyncIterator[None]:
             async with original(application):
-                await schema(application)
+                await create_schema(application)
                 task = asyncio.create_task(workload(application))
                 try:
                     yield

@@ -31,13 +31,13 @@ async def workload(app: FastAPI) -> None:
         print("phase=idle", flush=True)
         await asyncio.sleep(20)
         async with primary_session(factory, metrics) as session:
-            await write_sample(session, metrics)
+            await write_sample(session=session, metrics=metrics)
         async with app.state.primary_engine.begin() as connection:
             await connection.execute(text("DELETE FROM child"))
             await connection.execute(text("DELETE FROM parent"))
         async with primary_session(factory, metrics) as session:
             try:
-                await write_sample(session, metrics, fail=True)
+                await write_sample(session=session, metrics=metrics, fail=True)
             except ValueError:
                 pass
         async with primary_session(factory, metrics) as session, session.begin():

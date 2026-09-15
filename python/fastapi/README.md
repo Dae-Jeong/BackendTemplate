@@ -17,6 +17,11 @@ pool 크기·overflow·획득 timeout·SQLite 잠금 timeout은 `.env.example`�
 컨테이너는 DB URL이 있으면 Alembic upgrade 성공 후 앱을 시작합니다. 앱 lifespan은 연결을 확인하며 migration을 수행하지 않습니다.
 DB 계측의 의미와 범위는 [구현 설계](../../design/implementations/fastapi.md#db-계측과-로컬-모니터링-계획)를 참조합니다.
 
+DB 업무 Service는 `@transactional`과 required keyword-only `session`, `metrics`를 사용합니다.
+HTTP dependency는 Session 수명만 제공하며 자동 commit하지 않습니다. 같은 Session의 중첩 Service는 같은
+asyncio Task에서만 바깥 transaction에 참여하고, Service·Repository는 수동 commit/rollback을 호출하지 않습니다.
+자세한 전파·rollback-only·제외 범위는 [트랜잭션 실행 책임](../../design/implementations/transaction-boundaries.md)을 봅니다.
+
 ## 예약 예제 빠른 시작
 
 [로컬 실행 가이드](../../design/implementations/quickstart.md)에 컨테이너 시작 → 상품 생성 → 예약·재시도 → 종료 순서를 모았습니다.

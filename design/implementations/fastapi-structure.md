@@ -40,7 +40,7 @@ flowchart TD
     SRC --> DEP["dependencies/ · clock.py · database.py"]
     SRC --> HTTP["http/ · errors.py · observation.py"]
     SRC --> CORE["core/ · settings.py · clock.py · contracts.py · logging.py · metrics.py"]
-    CORE --> DB["database.py · database_metrics.py"]
+    CORE --> DB["database.py · database_metrics.py · transactions.py"]
 ```
 
 | 경로 | 역할 |
@@ -58,6 +58,7 @@ flowchart TD
 | `dependencies/clock.py` | FastAPI Depends와 앱 상태 접근을 연결하는 HTTP provider입니다. |
 | `dependencies/database.py` | Primary Session·DB metrics의 HTTP provider입니다. 자동 commit은 하지 않습니다. |
 | `core/database.py`, `core/database_metrics.py` | Engine·SQLite 옵션·Session 수명·명시적 연결 획득과 DB 계측입니다. |
+| `core/transactions.py` | `@transactional`의 begin·write connection·중첩 참여/rollback-only·오류 번역·완료 계측입니다. |
 | `contracts/database.py` | 연결 획득·업무 트랜잭션 결과 enum입니다. |
 | `http/errors.py` | 예외의 공개 응답 매핑·안전한 검증 오류·OpenAPI 오류 명세입니다. |
 | `http/observation.py` | ASGI 전송·실행 결과를 관측합니다. router와 별도로 HTTP 전체를 감싸는 경계입니다. |
@@ -65,7 +66,7 @@ flowchart TD
 | `core/contracts.py` | Clock·관측 결과·로그 문맥 등 공통 기반 계약입니다. |
 | `core/logging.py`, `core/metrics.py` | JSON 로그 출력과 Prometheus registry·지표 기록입니다. |
 | `routers/reservations.py`, `schemas/reservations.py` | 예약 HTTP 입력 검증·응답 변환·멱등 헤더입니다. |
-| `services/reservations.py` | 업무 순서·트랜잭션·재생·실패 분류를 소유합니다. |
+| `services/reservations.py` | `@transactional` 업무 순서와 재생·업무 실패 분류를 소유합니다. 기술 transaction 처리는 소유하지 않습니다. |
 | `repositories/reservations.py` | 조건부 차감·예약/키 저장·결과 조회 SQL입니다. commit하지 않습니다. |
 | `models/reservations.py` | Core Table·DB 제약·metadata입니다. 외부 요청 schema와 구분합니다. |
 | `contracts/reservations.py` | 불변 업무 결과 타입입니다. HTTP·저장 구현을 import하지 않습니다. |
