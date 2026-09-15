@@ -22,14 +22,14 @@ public class ReservationService {
 
     @Transactional(rollbackFor = Exception.class)
     public ReservationResult reserve(String productId, String key) {
-        var replay = repository.replay(key, productId);
+        var replay = repository.findMatchingReplay(key, productId);
         if (replay.isPresent()) {
             return new ReservationResult(replay.get(), true);
         }
         repository.claim(key);
         repository.decreaseStock(productId);
         var reservation = new Reservation(UUID.randomUUID().toString().replace("-", ""), productId, clock.instant());
-        repository.save(reservation, key);
+        repository.saveReservationAndReplay(reservation, key);
         return new ReservationResult(reservation, false);
     }
 
@@ -43,6 +43,6 @@ public class ReservationService {
 
     @Transactional(readOnly = true, rollbackFor = Exception.class)
     public ReservationResult replay(String productId, String key) {
-        return new ReservationResult(repository.replay(key, productId).orElseThrow(), true);
+        return new ReservationResult(repository.findMatchingReplay(key, productId).orElseThrow(), true);
     }
 }

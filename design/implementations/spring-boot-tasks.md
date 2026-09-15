@@ -1,6 +1,6 @@
 # Spring Boot 단계별 구현 task
 
-Status: Task 1–10 구현·자동 시험·중앙 코드 검토 완료 · 2026-09-08
+Status: Task 1–11 구현·자동 시험 완료 · reservation 저장·replay 명명 정리 · 2026-09-15
 
 실행 명령은 [사용 가이드](../../java/spring-boot/README.md), 시험 결과·미검증은
 [검증 기록](spring-boot-verification.md)이 소유합니다.
@@ -18,6 +18,7 @@ Status: Task 1–10 구현·자동 시험·중앙 코드 검토 완료 · 2026-0
 | 8 사용 가이드 | 복사 후 빌드·DB 비활성/활성·seed·API 추가 안내 | README 명령·복사 검증 및 중앙 통합 기록 참조 |
 | 9 JPA 전환 | Boot 관리 JPA·Hibernate, 기존 H2 schema·계약 보존 | strict clean test bootJar, 34개·11 suites·실패 0 |
 | 10 코드 읽기 비용 개선 | Problem 직접 생성·입력 의미 명시·예약 전용 오류 분기 제거·claim 판별명·표현 정리 | strict clean test bootJar, 35개·11 suites·실패 0 |
+| 11 reservation 저장·replay 명명 | paired reservation/replay 저장과 입력 일치 replay 조회를 메서드 이름에 명시 | 기존 strict clean test bootJar |
 
 ## 단계별 commit
 
@@ -62,3 +63,11 @@ Java 구현의 JdbcClient 저장 경계를 JPA entity·Spring Data repository로
 - `isH2ClaimInsertConflict()`는 기존 H2 SQLState와 INSERT SQL 조건을 그대로 사용합니다. transaction·flush·FK·시각·완료 metrics 동작은 유지합니다.
 - 누락·null·숫자·boolean·배열·객체·unknown field·잘못된 JSON의 공개 422 location/code 회귀 시험을 추가했습니다. 전체 명령과 결과는 [Task 10 검증](spring-boot-verification.md#task-10-코드-정리-검증)에 있습니다.
 - 중앙 코드 검토를 완료했습니다. 실행 중인 서비스·공유 DB·Compose는 변경하지 않았으며 이번 코드 정리에는 컨테이너 재배포를 포함하지 않습니다.
+
+## Task 11. reservation 저장·replay 명명
+
+`ReservationRepository.save`를 `saveReservationAndReplay`로, `replay`를
+`findMatchingReplay`로 바꾸고 `ReservationService` callsite를 함께 변경했습니다.
+paired persist·flush와 key/product mismatch 판단은 기존 repository에 남겼고,
+transaction proxy·rollback 뒤 `ReservationAttempts`의 fresh read 경계는 변경하지 않았습니다.
+이름 변경을 복제하는 새 테스트 없이 기존 전체 Spring 시험으로 검증했습니다.

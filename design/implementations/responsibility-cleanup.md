@@ -84,14 +84,14 @@ runner options·retry·replica·Interceptor·worker/Primary 재구현은 추가�
 ## Spring Boot
 
 실제 경로는 `ReservationService.reserve/seed/replay`,
-`ReservationAttempts.reserve`, `ReservationRepository.claim/replay/decreaseStock/save/seed`,
+`ReservationAttempts.reserve`, `ReservationRepository.claim/findMatchingReplay/decreaseStock/saveReservationAndReplay/seed`,
 `SeedConfiguration.seedProduct`이다.
 
 | 작은 작업 | 책임·파일/시그니처 | callsite 변화와 보존할 동작 | 검증 매핑 |
 | --- | --- | --- | --- |
-| SP-1 paired save 이름 명시 | `ReservationRepository.save(Reservation reservation, String key)`를 `saveReservationAndReplay(Reservation reservation, String key)`로 rename하고 Service callsite만 변경 | reservation row와 replay row가 paired write임을 이름으로 드러냄. `flush`는 완료가 아니며 public `@Transactional` proxy commit이 최종 경계 | [ReservationService.java](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/java/spring-boot/src/main/java/com/backendtemplate/services/ReservationService.java), [ReservationRepository.java](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/java/spring-boot/src/main/java/com/backendtemplate/repositories/ReservationRepository.java), `TransactionFailureTest` — **미실행** |
+| SP-1 paired save 이름 명시 | **구현**. `saveReservationAndReplay(Reservation reservation, String key)`와 Service callsite로 변경 | reservation row와 replay row가 paired write임을 이름으로 드러냄. `flush`는 완료가 아니며 public `@Transactional` proxy commit이 최종 경계 | [Spring Task 11 검증](spring-boot-verification.md#task-11-reservation-명명-검증) |
 | SP-2 seed scope | `SeedConfiguration.seedProduct`가 `ProductSeedService.seed(productId, stock)`를 호출하고, 새 concrete `ProductSeedRepository.seedIfAbsent(productId, stock)`가 `ProductEntity` insert-if-absent를 소유 | 기존 Spring Data `ProductRepository` interface를 seed 저장소로 오용하지 않음. `ReservationService`와 `ReservationRepository`의 seed 메서드 제거, 기존 stock/validation 유지 | [SeedConfiguration.java](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/java/spring-boot/src/main/java/com/backendtemplate/config/SeedConfiguration.java), [HttpDatabaseTest.java](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/java/spring-boot/src/test/java/com/backendtemplate/HttpDatabaseTest.java), [MigrationTest.java](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/java/spring-boot/src/test/java/com/backendtemplate/MigrationTest.java) — **미실행** |
-| SP-3 replay 이름/계약 유지 | `ReservationRepository.replay(String key, String productId)`가 저장 결과와 mismatch 판단 소유; Service는 `replay`와 reserve flow의 callsite만 명확화 | conflict policy를 별도 service로 이동하지 않음. `ReservationAttempts`는 rollback 이후 별도 조회 경계 | [HttpDatabaseTest.java](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/java/spring-boot/src/test/java/com/backendtemplate/HttpDatabaseTest.java) `replayConflictAndSoldOut`, [ProcessRecoveryTest.java](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/java/spring-boot/src/test/java/com/backendtemplate/ProcessRecoveryTest.java) same-key replay — **미실행** |
+| SP-3 replay 이름/계약 유지 | **구현**. `ReservationRepository.findMatchingReplay(String key, String productId)`와 Service callsite로 변경 | conflict policy를 별도 service로 이동하지 않음. `ReservationAttempts`는 rollback 이후 별도 조회 경계 | [Spring Task 11 검증](spring-boot-verification.md#task-11-reservation-명명-검증) |
 | SP-4 attempts 경계 문서화 | `ReservationAttempts.reserve(String productId, String key)`가 `IdempotencyClaimed` catch 후 `transactions.replay` 호출 | proxy rollback 완료 후 fresh read가 필요하므로 `ReservationAttempts`를 `ReservationService`에 합치거나 self-invocation으로 바꾸지 않음 | [HttpDatabaseTest.java](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/java/spring-boot/src/test/java/com/backendtemplate/HttpDatabaseTest.java), [TransactionFailureTest.java](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/java/spring-boot/src/test/java/com/backendtemplate/TransactionFailureTest.java), [ProcessRecoveryTest.java](https://github.com/Dae-Jeong/BackendTemplate/blob/bdcdb60/java/spring-boot/src/test/java/com/backendtemplate/ProcessRecoveryTest.java) — **미실행** |
 
 Spring에서는 `saveReservationAndReplay`가 현재 실제 동작의 명명 개선이다.
@@ -179,7 +179,7 @@ NE-4 seed maintenance transaction의 계측 범위는 유지한다.
 - Service는 `reserveInTransaction` 업무 흐름, runner는 기술 경계, Primary는 실제 pool/dirty cleanup을 소유함
 - callback·boundary·release·metrics 실패의 outcome과 원래 예외가 구분됨
 
-### Task 3. Spring paired save와 replay 명명
+### Task 3. Spring paired save와 replay 명명 — 구현 완료
 
 목표:
 SP-1/3의 이름을 실제 저장·조회 계약에 맞추고 호출을 변경한다.
@@ -215,7 +215,7 @@ RA-1의 단일 규칙을 구현한다. RA-2/4는 유지, RA-3 helper 추출은 �
 동적 수락 조건(테스트/build)은 구현 후 별도 실행 기록으로 남기며, 아래 작업 순서에서는
 통과를 주장하지 않는다.
 
-Task 1과 Task 2의 NestJS runner·worker 가독성 범위를 2026-09-15에 구현·검증했다. Task 3·4·5는 pending이며
+Task 1~3과 NestJS worker 가독성 범위를 2026-09-15에 구현·검증했다. Task 4·5는 pending이며
 각 구현 작업에서 검증·커밋을 나눈다. rename에 기존 검증으로 충분하면
 구현을 복제하는 새 테스트를 추가하지 않는다. FA-4와 추가 오류 케이스는 기존 검증의
 누락이 확인될 때만 보강하며 이름 변경에 기술 경계 재구현을 끼워 넣지 않는다.

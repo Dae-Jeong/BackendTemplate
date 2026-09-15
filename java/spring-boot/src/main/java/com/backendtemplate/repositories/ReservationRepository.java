@@ -42,7 +42,7 @@ public class ReservationRepository {
                 && failure.getSQL().contains("insert into reservation_claims");
     }
 
-    public Optional<Reservation> replay(String key, String productId) {
+    public Optional<Reservation> findMatchingReplay(String key, String productId) {
         return replays.findByKey(key).map(row -> {
             var value = row.toContract();
             if (!value.productId().equals(productId)) {
@@ -58,7 +58,7 @@ public class ReservationRepository {
         }
     }
 
-    public void save(Reservation reservation, String key) {
+    public void saveReservationAndReplay(Reservation reservation, String key) {
         var product = entities.getReference(ProductEntity.class, reservation.productId());
         var stored = new ReservationEntity(reservation, product);
         entities.persist(stored);

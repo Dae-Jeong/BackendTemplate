@@ -1,6 +1,6 @@
 # Spring Boot 검증 기록
 
-Status: 실제 구현·검증 결과 · 2026-09-08
+Status: 실제 구현·검증 및 reservation 명명 정리 결과 · 2026-09-15
 
 실행 가이드는 [README](../../java/spring-boot/README.md), 선택·transaction 의미는
 [구현 설계](spring-boot.md)가 소유합니다. FastAPI 시험 통과를 Java의 검증 증거로 사용하지 않습니다.
@@ -70,6 +70,14 @@ unknown field·잘못된 JSON은 빈 위치·INVALID임을 확인합니다. type
 임시 DB·OS 임시 포트를 쓰는 기존 시험만 실행했으며 실행 중인 로컬 서비스·공유 DB는 건드리지 않았습니다.
 중앙에서 코드 차이와 JUnit XML의 결과를 확인했습니다. 이번 변경의 Docker 배포·공유 수집 검증은 수행하지 않았으며
 H2 claim table의 단일 PK·Hibernate INSERT SQL에 의존하는 기존 분류 제한도 유지합니다.
+
+## Task 11 reservation 명명 검증
+
+`saveReservationAndReplay`와 `findMatchingReplay`로 repository와 실제 Service callsite만 변경했습니다.
+별도 repository·테스트를 추가하지 않았으며 기존 strict clean test와 bootJar로 paired persist·flush,
+replay mismatch, proxy commit/rollback과 `ReservationAttempts`의 rollback 뒤 fresh read를 재검증했습니다.
+격리 Temurin 25.0.4.1에서 `./gradlew clean test bootJar --no-daemon --console=plain`은
+35개·11 suites·실패/오류/skip 0으로 통과했습니다. 기본 환경의 Java 25 미탐지는 코드 실패와 구분합니다.
 
 ## Task 9 JPA 검증
 
