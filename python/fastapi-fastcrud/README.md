@@ -1,8 +1,8 @@
 # FastAPI + FastCRUD 시작점
 
 기존 `python/fastapi/`와 분리된 uv 프로젝트입니다. 같은 HTTP·수명·관측·SQLite
-예약 계약을 제공하되, 저장소 내부의 일반 조회·생성에 FastCRUD 0.22.3과 SQLAlchemy
-ORM mapped class를 사용합니다. 예약의 조건부 재고 차감은 명시적 SQLAlchemy
+예약 계약을 제공하되, 일반 조회·생성에 FastCRUD 0.22.3과 SQLAlchemy ORM mapped
+class를 직접 사용합니다. 예약의 조건부 재고 차감은 명시적 SQLAlchemy
 `update ... returning`으로 유지하며 `crud_router`와 Compose는 연결하지 않았습니다.
 
 ## 실행
@@ -37,20 +37,22 @@ endpoint는 등록하지 않습니다. 실제 `.env`, `data/`, `.venv/`, `dist/`
 ## 저장 경계
 
 - `models/`: `DeclarativeBase`와 DB 제약
-- `repositories/`: FastCRUD 호출, 조건부 재고 SQL, reservation·replay 결합 저장과 내부 contract 변환
-- `services/`: `@transactional`로 원자 범위를 지정하고 replay 확인 → 재고 차감 → 결합 저장의 업무 순서를 표현
+- `crud/`: model별 FastCRUD 객체와 조건부 재고 감소·seed upsert처럼 FastCRUD로 표현할 수 없는 SQL만 소유
+- `services/`: `@transactional`로 원자 범위를 지정하고 FastCRUD를 직접 호출해 replay 판정 → 재고 차감 → reservation·replay 저장의 업무 순서를 표현
 - `core/transactions.py`: `session.begin()`·SQLite `BEGIN IMMEDIATE` 획득·중첩 전파·오류 번역·계측
 - `schemas/`: 기능별 파일에서 공개 HTTP schema와 FastCRUD 전용 Pydantic 입력·선택 schema를 구분해 소유
 
-FastCRUD는 transaction을 소유하지 않으며 ORM 객체를 Repository 밖으로 반환하지
-않습니다. HTTP dependency는 Session 수명만 제공하고, decorated Service는 required keyword-only
+FastCRUD는 transaction을 소유하지 않습니다. 이 변형은 `Service → crud → DB`를 사용하며
+FastCRUD를 다시 감싸는 forwarding Repository 함수나 범용 `BaseCRUD`를 두지 않습니다. HTTP
+dependency는 Session 수명만 제공하고, decorated Service는 required keyword-only
 `session`, `metrics`를 받습니다. 같은 Task·Session 중첩만 참여하며 수동 commit/rollback과
 SAVEPOINT·REQUIRES_NEW는 지원하지 않습니다. 자동 `crud_router`는 인증·pagination·공개 응답 계약을 별도로 정한 뒤
 추가할 수 있는 후속 데모입니다. 상세 범위는
 [구현 설계](../../design/implementations/fastapi-fastcrud.md)를 봅니다.
 
-FastCRUD 0.22.3의 create 입력은 `model_dump()`을 제공하는 Pydantic 모델입니다. production에서
-쓰이지 않는 product create wrapper는 두지 않으며, SDK create 계약은 test-local 입력 모델로 직접 검증합니다.
+FastCRUD 0.22.3의 create 입력은 `model_dump()`을 제공하는 Pydantic 모델입니다. Service가
+storage 전용 Pydantic 입력을 만들고 `commit=False`로 호출하며, SDK create 계약은 test-local
+입력 모델로 직접 검증합니다.
 
 ## 검증
 

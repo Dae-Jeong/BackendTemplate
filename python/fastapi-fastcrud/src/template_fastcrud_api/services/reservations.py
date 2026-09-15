@@ -1,4 +1,4 @@
-from datetime import UTC
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,10 +7,21 @@ from template_fastcrud_api.contracts.reservations import Reservation, Reservatio
 from template_fastcrud_api.core.contracts import Clock
 from template_fastcrud_api.core.database_metrics import DatabaseMetrics
 from template_fastcrud_api.core.transactions import transactional
-from template_fastcrud_api.repositories.reservations import (
-    decrease_stock,
-    find_matching_replay,
-    save_reservation_and_replay,
+from template_fastcrud_api.crud.reservations import (
+    decrement_stock_if_available,
+    idempotency_crud,
+    product_crud,
+    reservation_crud,
+)
+from template_fastcrud_api.exceptions.reservations import (
+    IdempotencyConflict,
+    ProductNotFound,
+    SoldOut,
+)
+from template_fastcrud_api.schemas.reservations import (
+    IdempotencyRecord,
+    ProductSelect,
+    ReservationCreate,
 )
 
 
@@ -23,10 +34,58 @@ async def reserve(
     key: str,
     clock: Clock,
 ) -> ReservationResult:
-    existing = await find_matching_replay(session, key, product_id)
+    existing = await idempotency_crud.get(
+        db=session,
+        schema_to_select=IdempotencyRecord,
+        return_as_model=True,
+        key=key,
+    )
     if existing is not None:
-        return ReservationResult(existing, replayed=True)
-    await decrease_stock(session, product_id)
+        if existing.product_id != product_id:
+            raise IdempotencyConflict()
+        snapshot = existing.response
+        reservation = Reservation(
+            snapshot["reservation_id"],
+            snapshot["product_id"],
+            datetime.fromisoformat(snapshot["created_at"]),
+        )
+        return ReservationResult(reservation, replayed=True)
+
+    if not await decrement_stock_if_available(session, product_id):
+        product = await product_crud.get(
+            db=session,
+            schema_to_select=ProductSelect,
+            return_as_model=True,
+            id=product_id,
+            is_deleted=False,
+        )
+        if product is None:
+            raise ProductNotFound()
+        raise SoldOut()
+
     reservation = Reservation(uuid4().hex, product_id, clock().astimezone(UTC))
-    await save_reservation_and_replay(session, key, reservation)
+    snapshot = {
+        "reservation_id": reservation.reservation_id,
+        "product_id": reservation.product_id,
+        "created_at": reservation.created_at.isoformat(),
+    }
+    await reservation_crud.create(
+        db=session,
+        object=ReservationCreate(
+            id=reservation.reservation_id,
+            product_id=reservation.product_id,
+            created_at=snapshot["created_at"],
+        ),
+        commit=False,
+    )
+    await idempotency_crud.create(
+        db=session,
+        object=IdempotencyRecord(
+            key=key,
+            product_id=reservation.product_id,
+            reservation_id=reservation.reservation_id,
+            response=snapshot,
+        ),
+        commit=False,
+    )
     return ReservationResult(reservation, replayed=False)

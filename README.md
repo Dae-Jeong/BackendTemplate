@@ -64,16 +64,16 @@ Compose의 기본 환경 파일은 각 구현의 `.env.example`이며 별도 파
 
 ## 구조와 패턴
 
-역할별 폴더 안에서 기능별 파일을 맞춥니다. 아래는 세 구현이 공유하는 책임 흐름이며,
-실제 조립과 트랜잭션 API는 각 프레임워크에 맞춥니다.
+역할별 폴더 안에서 기능별 파일을 맞춥니다. 아래는 구현들이 공유하는 책임 흐름이며,
+저장 경계와 트랜잭션 API는 각 프레임워크에 맞춥니다.
 
 ```mermaid
 flowchart LR
     DI["앱 조립 · 의존성 주입"] -. 주입 .-> HTTP["Router / Controller<br/>입력 검증 · 응답 변환"]
     DI -. 주입 .-> SVC["Service<br/>업무 · 트랜잭션 경계"]
     HTTP --> SVC
-    SVC --> REPO["Repository<br/>조회 · 저장"]
-    REPO --> DB[("Primary DB")]
+    SVC --> STORE["저장 경계<br/>Repository 또는 crud"]
+    STORE --> DB[("Primary DB")]
     SVC -. 내부 결과 .-> CONTRACT["contracts<br/>HTTP·저장 구현과 분리"]
     HTTP -. 오류 변환 .-> ERR["공개 Problem 응답"]
 ```
@@ -82,7 +82,7 @@ flowchart LR
 | --- | --- |
 | 명시적 DI | FastAPI는 `Depends` provider와 함수 인자, Nest·Spring은 생성자 주입으로 연결합니다. |
 | 계약 분리 | 외부 schema/DTO, 내부 contract, DB 모델을 구분하고 업무가 HTTP 표현에 의존하지 않게 합니다. |
-| 업무 트랜잭션 | Service 경계에서 같은 연결로 처리하고 commit 성공 뒤 응답합니다. Repository는 commit하지 않습니다. |
+| 업무 트랜잭션 | Service 경계에서 같은 연결로 처리하고 commit 성공 뒤 응답합니다. Repository나 `crud` helper는 commit하지 않습니다. |
 | 동시성·멱등성 | 예약 예제에서 DB unique 제약·조건부 재고 차감·저장한 결과 재생으로 중복과 초과 예약을 제어합니다. |
 | 응답·오류 | 성공은 `data`, 오류는 Problem Details 형식입니다. health·metrics는 각 전용 형식을 유지합니다. |
 | 관측·수명 | JSON 로그, HTTP·DB metrics, readiness와 시작·종료 시 자원 정리를 제공합니다. |
@@ -90,6 +90,7 @@ flowchart LR
 
 기본 DB는 단일 Primary입니다. Replica·샤딩은 구현하지 않았으며 PostgreSQL 전환은 별도 검증이 필요합니다.
 폴더별 책임은 [FastAPI](design/implementations/fastapi-structure.md) ·
+[FastAPI + FastCRUD](design/implementations/fastapi-fastcrud.md) ·
 [NestJS](design/implementations/nestjs-structure.md) · [Spring Boot](design/implementations/spring-boot-structure.md)를 봅니다.
 
 ## 내 서비스로 가져가기

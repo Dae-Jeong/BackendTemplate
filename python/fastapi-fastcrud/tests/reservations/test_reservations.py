@@ -20,8 +20,12 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from template_fastcrud_api.bootstrap.app import create_app
 from template_fastcrud_api.core.settings import Settings
+from template_fastcrud_api.crud.reservations import product_crud
 from template_fastcrud_api.models.reservations import ProductModel, ReservationModel
-from template_fastcrud_api.repositories.reservations import product_crud
+from template_fastcrud_api.schemas.reservations import (
+    IdempotencyRecord,
+    ReservationCreate,
+)
 
 
 def database_state(url: str) -> tuple[int, int, int]:
@@ -36,7 +40,7 @@ def database_state(url: str) -> tuple[int, int, int]:
 
 
 def test_seed_cli_preserves_existing_stock(database_url: str) -> None:
-    def seed(stock: int):
+    def seed(stock: int, *, succeeds: bool = True):
         process = subprocess.run(
             [sys.executable, "-m", "template_fastcrud_api.seed", "--stock", str(stock)],
             env={**os.environ, "DB_PRIMARY_URL": database_url},
@@ -44,6 +48,9 @@ def test_seed_cli_preserves_existing_stock(database_url: str) -> None:
             text=True,
             timeout=15,
         )
+        if not succeeds:
+            assert process.returncode != 0
+            return None
         assert process.returncode == 0, process.stderr
         return json.loads(process.stdout)
 
@@ -59,6 +66,22 @@ def test_seed_cli_preserves_existing_stock(database_url: str) -> None:
         )
     assert seed(100) == {"product_id": "demo", "available": 1}
     assert database_state(database_url) == (1, 1, 1)
+
+    app = create_app(Settings(db_primary_url=database_url))
+
+    async def delete_product() -> None:
+        async with app.state.primary_session_factory() as session:
+            async with session.begin():
+                await product_crud.delete(db=session, commit=False, id="demo")
+
+    with TestClient(app) as api:
+        assert api.portal is not None
+        api.portal.call(delete_product)
+    assert seed(100, succeeds=False) is None
+    with closing(sqlite3.connect(str(make_url(database_url).database))) as connection:
+        assert connection.execute(
+            "SELECT available, is_deleted FROM products WHERE id='demo'"
+        ).fetchone() == (1, 1)
 
 
 @pytest.fixture
@@ -118,13 +141,22 @@ def test_save_failure_rolls_back_stock(
 ) -> None:
     import template_fastcrud_api.services.reservations as service
 
-    original = service.save_reservation_and_replay
+    original_reservation_create = service.reservation_crud.create
+    original = service.idempotency_crud.create
 
-    async def fail(session, key, reservation):
-        await original(session, key, reservation)
+    async def create_reservation(**kwargs):
+        assert kwargs["commit"] is False
+        assert isinstance(kwargs["object"], ReservationCreate)
+        return await original_reservation_create(**kwargs)
+
+    async def fail(**kwargs):
+        assert kwargs["commit"] is False
+        assert isinstance(kwargs["object"], IdempotencyRecord)
+        await original(**kwargs)
         raise RuntimeError("synthetic-private-error")
 
-    monkeypatch.setattr(service, "save_reservation_and_replay", fail)
+    monkeypatch.setattr(service.reservation_crud, "create", create_reservation)
+    monkeypatch.setattr(service.idempotency_crud, "create", fail)
     response = client.post("/v1/reservations", json={"product_id": "demo"})
     assert response.status_code == 500
     assert "synthetic-private-error" not in response.text
@@ -138,28 +170,29 @@ def test_commit_failure_rolls_back_and_same_key_can_retry(
 ) -> None:
     import template_fastcrud_api.services.reservations as service
 
-    original = service.save_reservation_and_replay
+    original = service.idempotency_crud.create
 
-    async def invalid_deferred_fk(session, key, reservation):
-        await original(session, key, reservation)
+    async def invalid_deferred_fk(**kwargs):
+        await original(**kwargs)
         # Actual SQLite constraint failure at COMMIT, after all business writes.
+        session = kwargs["db"]
         await session.execute(text("PRAGMA defer_foreign_keys=ON"))
         await session.execute(
             insert(ReservationModel).values(
                 id="invalid-fk",
                 product_id="missing",
-                created_at=reservation.created_at.isoformat(),
+                created_at="2026-09-15T00:00:00+00:00",
             )
         )
 
-    monkeypatch.setattr(service, "save_reservation_and_replay", invalid_deferred_fk)
+    monkeypatch.setattr(service.idempotency_crud, "create", invalid_deferred_fk)
     failed = client.post("/v1/reservations", json={"product_id": "demo"})
     assert failed.status_code == 500
     assert database_state(database_url) == (1, 0, 0)
     metrics = client.get("/metrics").text
     assert 'db_transactions_total{outcome="failed",role="primary"} 1.0' in metrics
     assert 'db_transactions_total{outcome="committed",role="primary"} 0.0' in metrics
-    monkeypatch.setattr(service, "save_reservation_and_replay", original)
+    monkeypatch.setattr(service.idempotency_crud, "create", original)
     retried = client.post("/v1/reservations", json={"product_id": "demo"})
     assert retried.status_code == 201
     assert retried.headers["Idempotency-Replayed"] == "false"
@@ -286,20 +319,20 @@ def test_deleted_product_still_replays_committed_key_but_rejects_new_key(
 def test_idempotency_insert_failure_rolls_back_reservation_stock_and_can_retry(
     client: TestClient, database_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import template_fastcrud_api.repositories.reservations as repository
+    import template_fastcrud_api.services.reservations as service
 
-    original = repository.idempotency_crud.create
+    original = service.idempotency_crud.create
 
     async def fail(*, db, **kwargs):
         assert await db.scalar(select(func.count()).select_from(ReservationModel)) == 1
         raise RuntimeError("at key save")
 
-    monkeypatch.setattr(repository.idempotency_crud, "create", fail)
+    monkeypatch.setattr(service.idempotency_crud, "create", fail)
     assert (
         client.post("/v1/reservations", json={"product_id": "demo"}).status_code == 500
     )
     assert database_state(database_url) == (1, 0, 0)
-    monkeypatch.setattr(repository.idempotency_crud, "create", original)
+    monkeypatch.setattr(service.idempotency_crud, "create", original)
     assert (
         client.post("/v1/reservations", json={"product_id": "demo"}).status_code == 201
     )

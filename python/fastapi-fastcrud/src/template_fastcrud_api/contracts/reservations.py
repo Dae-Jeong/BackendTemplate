@@ -10,12 +10,6 @@ class Reservation:
 
 
 @dataclass(frozen=True)
-class Product:
-    product_id: str
-    available: int
-
-
-@dataclass(frozen=True)
 class ReservationResult:
     reservation: Reservation
     replayed: bool

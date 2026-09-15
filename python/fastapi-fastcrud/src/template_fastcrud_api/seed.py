@@ -10,8 +10,12 @@ from template_fastcrud_api.core.database import create_primary_engine, primary_s
 from template_fastcrud_api.core.database_metrics import create_database_metrics
 from template_fastcrud_api.core.metrics import create_metrics
 from template_fastcrud_api.core.settings import Settings
-from template_fastcrud_api.repositories.reservations import seed_product
-from template_fastcrud_api.schemas.reservations import ReserveRequest
+from template_fastcrud_api.crud.reservations import (
+    insert_product_if_absent,
+    product_crud,
+)
+from template_fastcrud_api.exceptions.reservations import ProductNotFound
+from template_fastcrud_api.schemas.reservations import ProductSelect, ReserveRequest
 
 
 async def seed(product_id: str, stock: int) -> None:
@@ -27,12 +31,17 @@ async def seed(product_id: str, stock: int) -> None:
             primary_session(async_sessionmaker(engine), metrics) as session,
             session.begin(),
         ):
-            product = await seed_product(session, product_id, stock)
-        print(
-            json.dumps(
-                {"product_id": product.product_id, "available": product.available}
+            await insert_product_if_absent(session, product_id, stock)
+            product = await product_crud.get(
+                db=session,
+                schema_to_select=ProductSelect,
+                return_as_model=True,
+                id=product_id,
+                is_deleted=False,
             )
-        )
+            if product is None:
+                raise ProductNotFound()
+        print(json.dumps({"product_id": product.id, "available": product.available}))
     finally:
         await engine.dispose()
 

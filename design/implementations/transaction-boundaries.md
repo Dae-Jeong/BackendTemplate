@@ -23,7 +23,7 @@ flowchart TD
     DEP["dependency<br/>Session 생성·정리"] --> DEC["@transactional<br/>바깥 경계"]
     DEC --> BEGIN["session.begin<br/>write connection 선점"]
     BEGIN --> SVC["Service<br/>업무 순서"]
-    SVC --> REPO["Repository<br/>같은 Session SQL"]
+    SVC --> REPO["Repository / CRUD<br/>같은 Session SQL"]
     SVC -->|"같은 task·Session 중첩"| JOIN["decorated Service<br/>기존 경계 참여"]
     JOIN --> REPO
     DEC -->|"정상"| COMMIT["commit · committed 1회"]

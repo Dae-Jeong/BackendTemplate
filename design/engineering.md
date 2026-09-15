@@ -36,6 +36,7 @@ Status: 개발 기준 정본 · 2026-09-07. 문서 기준이며 자동 검사의
 ## DB와 외부 연계가 추가될 때
 
 - Repository는 업무 의미의 조회·저장과 scope 조건을 소유하고 ORM을 경계 안에 유지합니다. 저장 입력도 명시적인 타입으로 전달합니다.
+- `python/fastapi-fastcrud/`는 model별 FastCRUD API 자체를 저장 경계로 사용하는 명시적 예외입니다. 이 변형만 Service가 typed storage schema로 FastCRUD를 직접 호출하고, `crud/`에는 model별 객체와 특수 SQL만 두며 forwarding Repository·`BaseCRUD`를 만들지 않습니다. 업무 정책과 transaction 경계는 계속 Service가 소유합니다.
 - schema 변경은 migration과 함께 다룹니다. enum·제약·인덱스·pagination 정렬을 실제 DB에서 검증합니다.
 - 한 세션을 동시 task에 공유하지 않습니다. 병렬 세션 사용으로 원자성이 달라지면 이를 명시합니다.
 - flush는 commit이 아닙니다. 경합은 선조회만으로 막지 않고 제약·잠금·조건부 변경으로 불변조건을 보호합니다.
