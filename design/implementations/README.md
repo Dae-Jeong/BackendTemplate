@@ -17,7 +17,12 @@
 
 Rails의 최소 API 작업은 [사용 안내](../../ruby/rails/README.md) · [설계](rails.md) ·
 [구조](rails-structure.md) · [Task](rails-tasks.md) · [검증](rails-verification.md)에서 확인합니다.
-예약 생성·조회와 조건부 재고 차감을 구현했으며, 아래 세 구현과 달리 멱등성·관측·Compose는 아직 후속 범위입니다.
+예약 생성·조회와 조건부 재고 차감을 구현했으며, 검증 완료된 네 구현과 달리
+멱등성·관측·Compose는 아직 후속 범위입니다.
+
+Kotlin Spring Boot는 Java 앱을 대체하거나 호출하지 않는 sibling으로 구현 중입니다.
+[구현 설계](kotlin-spring-boot.md) · [구조](kotlin-spring-boot-structure.md) · [Task](kotlin-spring-boot-tasks.md)는
+현재 계획을 소유하며, 실행 README와 검증 기록이 생기기 전에는 제공 완료 구현에 포함하지 않습니다.
 
 | 구현 | 실행 | 설계·구조 | 작업·검증 |
 | --- | --- | --- | --- |
@@ -25,10 +30,11 @@ Rails의 최소 API 작업은 [사용 안내](../../ruby/rails/README.md) · [�
 | Python / FastAPI + FastCRUD | [환경·명령](../../python/fastapi-fastcrud/README.md) | [설계·검증](fastapi-fastcrud.md) | [설계·검증](fastapi-fastcrud.md) |
 | TypeScript / NestJS | [사용 안내](../../ts/nestjs/README.md) | [설계](nestjs.md) · [구조](nestjs-structure.md) | [Task](nestjs-tasks.md) · [검증](nestjs-verification.md) |
 | Java / Spring Boot | [사용 안내](../../java/spring-boot/README.md) | [내부 동작](spring-boot-internals.md) · [설계](spring-boot.md) · [구조](spring-boot-structure.md) | [Task](spring-boot-tasks.md) · [검증](spring-boot-verification.md) |
+| Kotlin / Spring Boot (구현 중) | 아직 없음 | [설계](kotlin-spring-boot.md) · [구조](kotlin-spring-boot-structure.md) | [미구현 Task](kotlin-spring-boot-tasks.md) · 검증 기록 아직 없음 |
 
-FastCRUD 변형을 포함한 네 구현 모두 설정·DI·초기화/종료·health·응답 계약·로그·metrics와
+FastCRUD 변형을 포함한 검증 완료 네 구현은 설정·DI·초기화/종료·health·응답 계약·로그·metrics와
 한정 수량 예약의 동시성·멱등성 예제를 제공합니다.
-DB를 설정하지 않으면 예약 기능은 등록하지 않습니다.
+이 네 구현은 DB를 설정하지 않으면 예약 기능을 등록하지 않습니다.
 실행한 시험과 구현별 제한은 각 검증 기록에서 확인합니다.
 
 | 선택 | FastAPI | FastAPI + FastCRUD | NestJS | Spring Boot |
@@ -59,6 +65,7 @@ Rust는 후보이며 빈 프로젝트를 만들지 않았습니다.
 | FastAPI + FastCRUD | 18092 | — (미통합) | — (미통합) |
 | NestJS | 18083 | 18084 | 3000 |
 | Spring Boot | 18085 | 18086 | 8080 |
+| Kotlin Spring Boot (구현 중) | 18093 (계획) | 18094 (예약·미구현) | — (미구현) |
 | Rails 최소 API | 18088 | 18089 (예약·미통합) | 3000 (예정) |
 | MkDocs | 18090 | — | — |
 | Prometheus | — | 19090 | 9090 |
@@ -66,5 +73,6 @@ Rust는 후보이며 빈 프로젝트를 만들지 않았습니다.
 
 게시 주소는 `127.0.0.1`입니다. `18082`는 기존 FastAPI 임시 DB 모니터링 시험용으로 남깁니다.
 시험 서버는 OS 임시 포트와 격리 데이터를 사용합니다.
-`compose.yaml` 하나와 `scripts/compose.sh`로 구현을 선택하고 데이터 볼륨은 구현별로 구분합니다.
+`compose.yaml` 하나와 `scripts/compose.sh`로 통합된 구현을 선택하고 데이터 볼륨은 구현별로 구분합니다.
+Kotlin Spring Boot는 이 Compose 경로에 없으며 18094는 후속 container 통합을 위한 예약입니다.
 Prometheus·Grafana 한 세트를 공유하는 방법은 [로컬 모니터링](local-monitoring.md)을 따릅니다.
