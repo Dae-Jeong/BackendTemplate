@@ -3,6 +3,8 @@
 공통 Backend 계약을 각 언어·프레임워크에서 실현하는 방법과 실제 검증 범위를 소유합니다.
 공통 계약은 [Backend](../backend.md), [개발 원칙](../engineering.md), [관측](../observability.md),
 [Runtime Review](../runtime-review.md)를 참조합니다.
+[루트 README](../../README.md)에서 전체 범위로, [템플릿 적용 Runbook](../../RUNBOOK.md)에서
+공통 적용 순서로 돌아갈 수 있습니다.
 
 [예약 코드 책임 정리](responsibility-cleanup.md)는 기존 개발·검증 규칙에 대한 검토와 구현별 상태를 담습니다.
 승인된 NestJS·FastAPI·Spring Boot·Rails 책임 정리 항목은 구현별 검증 기록과 함께 완료했습니다.
@@ -29,10 +31,11 @@ native 범위는 수락했으며 Docker·Compose는 미구현입니다.
 | 구현 | 실행 | 설계·구조 | 작업·검증 |
 | --- | --- | --- | --- |
 | Python / FastAPI | [로컬 실행](quickstart.md) · [환경·명령](../../python/fastapi/README.md) | [설계](fastapi.md) · [구조](fastapi-structure.md) | [Task](fastapi-tasks.md) · [검증](fastapi-verification.md) |
-| Python / FastAPI + FastCRUD | [환경·명령](../../python/fastapi-fastcrud/README.md) | [설계·검증](fastapi-fastcrud.md) | [설계·검증](fastapi-fastcrud.md) |
+| Python / FastAPI + FastCRUD | [환경·명령](../../python/fastapi-fastcrud/README.md) | [설계·구조](fastapi-fastcrud.md#구현-구조와-구성-요소) | [작업·검증](fastapi-fastcrud.md#구현검증-상태) |
 | TypeScript / NestJS | [사용 안내](../../ts/nestjs/README.md) | [설계](nestjs.md) · [구조](nestjs-structure.md) | [Task](nestjs-tasks.md) · [검증](nestjs-verification.md) |
 | Java / Spring Boot | [사용 안내](../../java/spring-boot/README.md) | [내부 동작](spring-boot-internals.md) · [설계](spring-boot.md) · [구조](spring-boot-structure.md) | [Task](spring-boot-tasks.md) · [검증](spring-boot-verification.md) |
 | Kotlin / Spring Boot | [native 실행](../../kotlin/spring-boot/README.md) | [설계](kotlin-spring-boot.md) · [구조](kotlin-spring-boot-structure.md) | [Task](kotlin-spring-boot-tasks.md) · [검증](kotlin-spring-boot-verification.md) |
+| Ruby / Rails | [native 실행](../../ruby/rails/README.md) | [설계](rails.md) · [구조](rails-structure.md) | [Task](rails-tasks.md) · [검증](rails-verification.md) |
 
 FastCRUD 변형과 Kotlin sibling을 포함한 검증 완료 다섯 구현은 설정·DI·초기화/종료·health·응답 계약·로그·metrics와
 한정 수량 예약의 동시성·멱등성 예제를 제공합니다.

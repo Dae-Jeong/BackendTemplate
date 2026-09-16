@@ -2,6 +2,9 @@
 
 Status: Task 1~4 및 중앙 HTTP 예외 처리 완료 · 2026-09-16
 
+[구현 색인](README.md) · [Rails 사용 안내](../../ruby/rails/README.md) ·
+[구현 설계](rails.md) · [검증](rails-verification.md)
+
 ## Task 1. 실행 방식과 저장 경계
 
 - [x] 공식 release와 local gemspec으로 Ruby 4.0.6 / Rails 8.1.3.1 호환 확인

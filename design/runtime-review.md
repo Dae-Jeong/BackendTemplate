@@ -4,6 +4,8 @@ Status: 설계·리뷰 기준 정본 · 자동 하네스 미구현 · 2026-09-07
 
 언어·실행 모델·worker·연결 풀·큐·용량을 선택하거나 변경할 때만 읽습니다. 일반 문구 수정에는 요구하지 않습니다.
 
+[설계 안내](README.md) · [개발 원칙](engineering.md) · [구현별 설계 안내](implementations/README.md)
+
 ```mermaid
 flowchart LR
     GOAL["업무 목표와 부하 가정"] --> HYP["런타임·I/O 병목 가설"]

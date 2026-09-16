@@ -2,6 +2,9 @@
 
 Status: Task 1~4와 중앙 HTTP 예외 경계 검증 완료 · 2026-09-16
 
+[구현 색인](README.md) · [Rails 사용 안내](../../ruby/rails/README.md) ·
+[폴더 구조](rails-structure.md) · [Task](rails-tasks.md) · [검증](rails-verification.md)
+
 ## 버전 선택
 
 Ruby 4.0.6과 Rails 8.1.3.1을 고정했습니다. 2026-09-15 기준 Ruby 공식 release 목록의 최신 stable은

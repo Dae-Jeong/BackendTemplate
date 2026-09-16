@@ -2,6 +2,9 @@
 
 Status: Task 1~4 및 중앙 HTTP 예외 경계 자동 검사 완료 · 2026-09-16
 
+[구현 색인](README.md) · [Rails 사용 안내](../../ruby/rails/README.md) ·
+[구현 설계](rails.md) · [Task](rails-tasks.md)
+
 ## 도구와 생성 명령
 
 실제 사용 버전은 Ruby 4.0.6, RubyGems 4.0.16, Bundler 4.0.16, Rails 8.1.3.1,

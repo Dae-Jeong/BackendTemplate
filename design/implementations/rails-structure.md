@@ -2,6 +2,9 @@
 
 Status: Task 1~4 및 중앙 HTTP 예외 경계 실제 구조 · 2026-09-16
 
+[구현 색인](README.md) · [Rails 사용 안내](../../ruby/rails/README.md) ·
+[구현 설계](rails.md) · [Task](rails-tasks.md)
+
 `ruby/rails/`는 Rails generator의 관용적 역할별 경로를 유지합니다.
 
 ```text

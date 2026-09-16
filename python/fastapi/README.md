@@ -7,6 +7,11 @@ Status: SQLite 예약·동시성·멱등성 1차 구현·검증 완료 · 2026-0
 FastAPI 0.141.1, Uvicorn 0.52.4로 최소 실행을 확인했습니다.
 `src/template_api/`가 애플리케이션 코드의 시작점입니다.
 
+문서 지도: [구현 색인](../../design/implementations/README.md) ·
+[설계](../../design/implementations/fastapi.md) · [구조](../../design/implementations/fastapi-structure.md) ·
+[Task](../../design/implementations/fastapi-tasks.md) · [검증](../../design/implementations/fastapi-verification.md) ·
+[루트 README](../../README.md) · [적용 Runbook](../../RUNBOOK.md)
+
 ## 선택 DB 연결
 
 `DB_PRIMARY_URL`을 비우면 DB 없는 앱이며 예약 endpoint를 등록하지 않습니다. 현재 파일 SQLite만 지원합니다.

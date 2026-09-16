@@ -132,7 +132,7 @@ Java 계약과 같은 안전한 JSON logging, 요청 문맥, 실제 transaction 
 Kotlin 구현과 독립 검토가 수락된 뒤 coordinator가 저장소 공용 진입점과 MkDocs 탐색 경로를 실제 상태에 맞게 연결합니다.
 
 예상 결과:
-- 루트 README, `design/implementations/README.md`, 구현 README/verification과 MkDocs nav에서 Kotlin sibling을 찾을 수 있음
+- 루트 README, [구현 색인](README.md), 구현 README/verification과 MkDocs nav에서 Kotlin sibling을 찾을 수 있음
 - 구현 전 계획 문구가 실제 verified 범위로 갱신되고 Java·Rails 설명이나 포트 표와 모순이 없음
 - MkDocs strict build와 Mermaid 렌더링이 warning 없이 통과함
 - 공유 문서 변경은 현재 design worker의 세 파일과 분리되어 coordinator가 검토·반영함

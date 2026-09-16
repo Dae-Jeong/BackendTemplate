@@ -6,6 +6,11 @@ Ruby 4.0.6, Rails 8.1.3.1, Active Record와 SQLite를 사용하는 독립 API �
 `.ruby-version`, `Gemfile`, `Gemfile.lock`이 도구와 gem 버전을 고정합니다. 시스템 Ruby나
 사용자 기본 shell 설정을 바꾸지 말고 `.ruby-version`을 지원하는 version manager 또는 프로젝트 전용 Ruby를 사용합니다.
 
+문서 지도: [구현 색인](../../design/implementations/README.md) ·
+[설계](../../design/implementations/rails.md) · [구조](../../design/implementations/rails-structure.md) ·
+[Task](../../design/implementations/rails-tasks.md) · [검증](../../design/implementations/rails-verification.md) ·
+[루트 README](../../README.md) · [적용 Runbook](../../RUNBOOK.md)
+
 ## Ruby 준비
 
 1. [Ruby 공식 설치 안내](https://www.ruby-lang.org/en/documentation/installation/)에서 OS에 맞는 사용자 로컬 설치 방식이나 version manager를 선택합니다.

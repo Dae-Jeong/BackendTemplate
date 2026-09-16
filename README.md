@@ -4,6 +4,8 @@
 FastAPI·SQLite, NestJS·SQLite, Java/Kotlin Spring Boot·H2 구현과 두 번째 Python 선택지인
 FastAPI + FastCRUD·SQLite 구현을 제공합니다.
 공통 응답·DI·트랜잭션·관측 계약을 각 프레임워크의 방식으로 구현합니다.
+구현을 선택한 뒤 실행·설계·구조·Task·검증으로 이동하는 단일 색인은
+[구현별 설계 안내](design/implementations/README.md)입니다.
 
 Rails는 [별도 시작점](ruby/rails/README.md)으로 추가 중입니다. 인사·health와 SQLite 예약 생성·조회,
 조건부 재고 차감을 제공하며 멱등성·metrics·Compose 통합은 후속입니다.
@@ -23,6 +25,7 @@ Kotlin Spring Boot sibling은 [native 실행 안내](kotlin/spring-boot/README.m
 | [`ts/nestjs/`](ts/nestjs/README.md) | NestJS · pnpm · Drizzle/SQLite · worker에서 DB 실행 |
 | [`java/spring-boot/`](java/spring-boot/README.md) | Spring Boot · Gradle · JPA/Hibernate/H2 · Flyway |
 | [`kotlin/spring-boot/`](kotlin/spring-boot/README.md) | Kotlin Spring Boot · Gradle Kotlin DSL · JPA/Hibernate/H2 · native 검증 완료 |
+| [`ruby/rails/`](ruby/rails/README.md) | Rails · Bundler · Active Record/SQLite · native Task 1–4 검증 |
 | [`design/`](design/README.md) | 공통 설계와 구현별 상세·검증의 정본 |
 | `compose.yaml` · `scripts/compose.sh` | 구현을 선택해 로컬 컨테이너 실행 |
 | `infra/monitoring/` · `docs/` | Prometheus·Grafana 설정과 MkDocs 도구 환경 |
@@ -125,9 +128,10 @@ flowchart LR
 
 | 영역 | 읽는 목적 | 시작 문서 |
 | --- | --- | --- |
-| 사용 가이드 | 실행하고 기능을 붙입니다. | [FastAPI](design/implementations/quickstart.md) · [FastAPI + FastCRUD](python/fastapi-fastcrud/README.md) · [NestJS](ts/nestjs/README.md) · [Spring Boot](java/spring-boot/README.md) · [Kotlin Spring Boot](kotlin/spring-boot/README.md) · [모니터링](design/implementations/local-monitoring.md) |
-| 상세 설명 | 구조·설정·설계 이유와 Kotlin 구현 범위를 찾아봅니다. | [프로젝트 개요](design/overview.md) · [구현별 설계](design/implementations/README.md) · [Kotlin Spring Boot](design/implementations/kotlin-spring-boot.md) |
-| 작업·검증 기록 | 완료 범위와 시험 결과, 남은 검토·후속 범위를 구분합니다. | [FastAPI](design/implementations/fastapi-verification.md) · [NestJS](design/implementations/nestjs-verification.md) · [Spring Boot](design/implementations/spring-boot-verification.md) · [Kotlin Spring Boot](design/implementations/kotlin-spring-boot-verification.md) |
+| 구현 선택 | 언어·프레임워크를 비교하고 해당 실행·설계·구조·Task·검증으로 이동합니다. | [구현별 설계 안내](design/implementations/README.md) |
+| 사용 가이드 | 선택한 구현을 실행하고 서비스에 기능을 붙입니다. | [템플릿 적용 Runbook](RUNBOOK.md) · [로컬 모니터링](design/implementations/local-monitoring.md) |
+| 상세 설명 | 공통 계약·구조·설정·설계 이유를 찾아봅니다. | [프로젝트 개요](design/overview.md) · [설계 안내](design/README.md) |
+| 작업·검증 기록 | 구현별 완료 범위와 시험 결과, 남은 후속 범위를 구분합니다. | [구현별 설계 안내](design/implementations/README.md) |
 
 ## 로컬 가이드 실행
 

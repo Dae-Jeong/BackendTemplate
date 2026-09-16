@@ -2,9 +2,12 @@
 
 Kotlin 2.3.21 · Java 25 · Spring Boot 4.1.1 · Spring MVC · JPA/Hibernate · H2 · Flyway.
 이 앱은 `java/spring-boot/`와 독립적으로 실행되며 native 기본 주소는
-http://127.0.0.1:18093 입니다. 설계와 실제 검증은
-[`kotlin-spring-boot.md`](../../design/implementations/kotlin-spring-boot.md)와
-[`kotlin-spring-boot-verification.md`](../../design/implementations/kotlin-spring-boot-verification.md)를 봅니다.
+http://127.0.0.1:18093 입니다.
+
+문서 지도: [구현 색인](../../design/implementations/README.md) ·
+[설계](../../design/implementations/kotlin-spring-boot.md) · [구조](../../design/implementations/kotlin-spring-boot-structure.md) ·
+[Task](../../design/implementations/kotlin-spring-boot-tasks.md) · [검증](../../design/implementations/kotlin-spring-boot-verification.md) ·
+[루트 README](../../README.md) · [적용 Runbook](../../RUNBOOK.md)
 
 ## 빌드와 DB 없는 실행
 

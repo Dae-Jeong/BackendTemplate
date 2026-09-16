@@ -5,6 +5,12 @@
 class를 직접 사용합니다. 예약의 조건부 재고 차감은 명시적 SQLAlchemy
 `update ... returning`으로 유지하며 `crud_router`와 Compose는 연결하지 않았습니다.
 
+문서 지도: [구현 색인](../../design/implementations/README.md) ·
+[설계·구조·작업·검증](../../design/implementations/fastapi-fastcrud.md) ·
+[루트 README](../../README.md) · [적용 Runbook](../../RUNBOOK.md).
+
+이 변형은 아직 분리된 구조·Task·검증 문서 대신 하나의 구현 문서가 세 영역을 함께 소유합니다.
+
 ## 실행
 
 이 디렉터리에서 실행합니다. Python 3.14.7과 의존성은 `.python-version`,

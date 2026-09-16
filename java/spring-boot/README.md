@@ -5,6 +5,11 @@ Java major의 정본은 `.java-version`, 의존성의 정본은 Gradle 설정과
 예약 코드·transaction·JPA의 내부 동작은 [로직과 내부 동작](../../design/implementations/spring-boot-internals.md),
 설계·시험 상세는 [Spring Boot 설계](../../design/implementations/spring-boot.md)를 봅니다.
 
+문서 지도: [구현 색인](../../design/implementations/README.md) ·
+[설계](../../design/implementations/spring-boot.md) · [구조](../../design/implementations/spring-boot-structure.md) ·
+[Task](../../design/implementations/spring-boot-tasks.md) · [검증](../../design/implementations/spring-boot-verification.md) ·
+[루트 README](../../README.md) · [적용 Runbook](../../RUNBOOK.md)
+
 ## 빌드와 DB 없는 실행
 
 JDK 25를 먼저 설치합니다. 아래 `/path/to/jdk-25`를 설치 경로로 바꾸고 현재 셸에서만 지정합니다.
